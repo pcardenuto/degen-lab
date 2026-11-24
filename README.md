@@ -18,13 +18,13 @@ Este diretório já está inicializado como um repositório **Git** na branch `m
 1. Crie um novo repositório vazio no seu GitHub (ex: `degen-lab`).
 2. No terminal (dentro desta pasta), conecte o repositório remoto e envie os arquivos:
    ```bash
-   git remote add origin https://github.com/SEU-USUARIO/degen-lab.git
+   git remote add origin https://github.com/pcardenuto/degen-lab.git
    git push -u origin main
    ```
 3. No GitHub, acesse a aba **Settings → Pages** do repositório:
    - Em **Build and deployment → Source**, selecione **Deploy from a branch** (branch `main`, pasta `/ (root)`) **ou** **GitHub Actions**.
 4. Em poucos segundos, sua ferramenta estará online em:
-   `https://SEU-USUARIO.github.io/degen-lab/`
+   `https://pcardenuto.github.io/degen-lab/`
 
 ---
 
