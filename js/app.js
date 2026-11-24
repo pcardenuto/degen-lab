@@ -37,7 +37,12 @@
     downloadTextFile,
     copyToClipboard,
     createCanvasRecorder,
-    exportSpriteSheet
+    exportSpriteSheet,
+    getSavedApiKey,
+    saveApiKey,
+    compileDesignerPrompt,
+    generateWithNanoBananaApi,
+    generateProceduralDesignerCanvas
   } = global.DegenLab;
 
   const MAX_WORKING_DIMENSION = 960;
@@ -1857,6 +1862,159 @@
       }
       await copyToClipboard(text);
       showToast('📋 Arte copiada para a área de transferência!');
+    });
+
+    // 14. NANO BANANA // DESIGNER LAB
+    const nbModal = document.getElementById('nanobanana-modal');
+    const nbApiKeyInput = document.getElementById('nb-api-key');
+    const nbCompiledPreview = document.getElementById('nb-compiled-preview');
+    const nbActiveEngineLabel = document.getElementById('nb-active-engine-label');
+    const nbGallery = document.getElementById('nb-gallery');
+    const nbGalleryCount = document.getElementById('nb-gallery-count');
+    const nbSessionHistory = [];
+
+    nbApiKeyInput.value = getSavedApiKey();
+
+    const getNbConfig = () => ({
+      model: document.getElementById('nb-model').value,
+      mode: document.getElementById('nb-mode').value,
+      apiKey: nbApiKeyInput.value.trim(),
+      lighting: document.getElementById('nb-lighting').value,
+      material: document.getElementById('nb-material').value,
+      lens: document.getElementById('nb-lens').value,
+      aspectRatio: document.getElementById('nb-aspect').value,
+      background: document.getElementById('nb-background').value,
+      optimizeForEngine: document.getElementById('nb-optimize-engine').checked,
+      prompt: document.getElementById('nb-prompt').value,
+      negative: document.getElementById('nb-negative').value,
+      seed: Date.now()
+    });
+
+    const refreshNbPromptPreview = () => {
+      nbActiveEngineLabel.textContent = state.mode.toUpperCase();
+      nbCompiledPreview.textContent = compileDesignerPrompt(getNbConfig(), state.mode);
+    };
+
+    const openNbModal = () => {
+      refreshNbPromptPreview();
+      nbModal.classList.remove('hidden');
+    };
+
+    const closeNbModal = () => {
+      nbModal.classList.add('hidden');
+    };
+
+    document.getElementById('btn-open-nanobanana').addEventListener('click', openNbModal);
+    document.getElementById('btn-close-nanobanana').addEventListener('click', closeNbModal);
+    nbModal.addEventListener('click', (e) => {
+      if (e.target === nbModal) closeNbModal();
+    });
+
+    document.getElementById('btn-toggle-nb-key').addEventListener('click', () => {
+      nbApiKeyInput.type = nbApiKeyInput.type === 'password' ? 'text' : 'password';
+    });
+
+    nbApiKeyInput.addEventListener('change', () => {
+      saveApiKey(nbApiKeyInput.value);
+    });
+
+    [
+      'nb-model', 'nb-mode', 'nb-lighting', 'nb-material',
+      'nb-lens', 'nb-aspect', 'nb-background', 'nb-optimize-engine',
+      'nb-prompt', 'nb-negative'
+    ].forEach((id) => {
+      const el = document.getElementById(id);
+      el.addEventListener('input', refreshNbPromptPreview);
+      el.addEventListener('change', refreshNbPromptPreview);
+    });
+
+    document.querySelectorAll('[data-nb-idea]').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        document.getElementById('nb-prompt').value = chip.dataset.nbIdea;
+        refreshNbPromptPreview();
+      });
+    });
+
+    document.getElementById('btn-nb-copy-prompt').addEventListener('click', async () => {
+      await copyToClipboard(nbCompiledPreview.textContent);
+      showToast('📋 Prompt técnico copiado!');
+    });
+
+    const addToNbGallery = (canvas, label) => {
+      const dataUrl = canvas.toDataURL('image/png');
+      nbSessionHistory.unshift({ canvas, dataUrl, label });
+      nbGalleryCount.textContent = `${nbSessionHistory.length} ${nbSessionHistory.length === 1 ? 'item' : 'itens'}`;
+      nbGallery.innerHTML = '';
+
+      nbSessionHistory.forEach((item) => {
+        const thumb = document.createElement('div');
+        thumb.className = 'nb-thumb';
+        thumb.title = `Aplicar ao palco: ${item.label}`;
+        const img = document.createElement('img');
+        img.src = item.dataUrl;
+        thumb.appendChild(img);
+        thumb.addEventListener('click', () => {
+          setSourceImage(item.canvas, item.label);
+        });
+        nbGallery.appendChild(thumb);
+      });
+    };
+
+    const getReferenceCanvasForMode = (mode) => {
+      if (mode === 'remix-output') return outputCanvas;
+      if (mode === 'remix-source') return sourceCanvas;
+      return null;
+    };
+
+    const btnNbGenerate = document.getElementById('btn-nb-generate');
+    btnNbGenerate.addEventListener('click', async () => {
+      const cfg = getNbConfig();
+      if (cfg.model === 'offline-synth') {
+        document.getElementById('btn-nb-procedural').click();
+        return;
+      }
+
+      const origText = btnNbGenerate.textContent;
+      btnNbGenerate.disabled = true;
+      btnNbGenerate.textContent = '⏳ Gerando no Nano Banana...';
+
+      try {
+        const refCanvas = getReferenceCanvasForMode(cfg.mode);
+        const result = await generateWithNanoBananaApi(cfg, state.mode, refCanvas);
+        const label = `🍌 Nano Banana (${result.modelUsed})`;
+        setSourceImage(result.canvas, label);
+        addToNbGallery(result.canvas, label);
+        closeNbModal();
+      } catch (err) {
+        showToast(`⚠ ${err.message}`);
+      } finally {
+        btnNbGenerate.disabled = false;
+        btnNbGenerate.textContent = origText;
+      }
+    });
+
+    document.getElementById('btn-nb-procedural').addEventListener('click', () => {
+      const cfg = getNbConfig();
+      const refCanvas = getReferenceCanvasForMode(cfg.mode);
+      const result = generateProceduralDesignerCanvas(cfg, refCanvas);
+      const label = `⚡ Synth: ${cfg.material.toUpperCase()} / ${cfg.lighting.toUpperCase()}`;
+      setSourceImage(result.canvas, label);
+      addToNbGallery(result.canvas, label);
+      closeNbModal();
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !nbModal.classList.contains('hidden')) {
+        closeNbModal();
+        return;
+      }
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') {
+        return;
+      }
+      if (e.key.toLowerCase() === 'b' && !e.metaKey && !e.ctrlKey) {
+        if (nbModal.classList.contains('hidden')) openNbModal();
+        else closeNbModal();
+      }
     });
   }
 

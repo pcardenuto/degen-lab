@@ -19,6 +19,9 @@
       </div>
 
       <div class="topbar-actions">
+        <button class="btn btn-nanobanana btn-sm" id="btn-open-nanobanana" title="Abrir Estúdio Nano Banana AI com Controles para Designers (Tecla B)">
+          🍌 Nano Banana AI
+        </button>
         <button class="btn btn-secondary btn-sm" id="btn-undo" title="Desfazer última alteração (Ctrl/Cmd + Z)">
           ↶ Desfazer
         </button>
@@ -1090,6 +1093,183 @@
       </aside>
     </div>
 
+    <!-- NANO BANANA // DESIGNER LAB MODAL -->
+    <div class="nb-modal-backdrop hidden" id="nanobanana-modal">
+      <div class="nb-modal">
+        <header class="nb-modal-header">
+          <div class="nb-title-wrap">
+            <span class="nb-badge">🍌 NANO BANANA // DESIGNER LAB</span>
+            <p>Gerador & Remixador de Imagens Otimizado para Arte Generativa (Gemini Image API + Procedural Synth)</p>
+          </div>
+          <button class="btn btn-ghost btn-sm" id="btn-close-nanobanana" title="Fechar (Esc)">✕ Fechar</button>
+        </header>
+
+        <div class="nb-modal-body">
+          <!-- Left Column: Art Direction & Designer Controls -->
+          <div class="nb-col nb-col-controls">
+            <div class="nb-card">
+              <div class="section-header">
+                <span class="section-title">01. MOTOR & CONEXÃO GEMINI API</span>
+                <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" class="btn-link">Obter API Key ↗</a>
+              </div>
+
+              <div class="two-col-controls">
+                <div class="control-group">
+                  <label for="nb-model">Modelo de Imagem</label>
+                  <select id="nb-model">
+                    <option value="gemini-2.5-flash-image">Nano Banana (Gemini 2.5 Flash Image)</option>
+                    <option value="gemini-2.0-flash-exp-image-generation">Nano Banana Exp (Gemini 2.0 Image Gen)</option>
+                    <option value="imagen-3.0-generate-002">Imagen 3 Studio (High-Fidelity)</option>
+                    <option value="offline-synth">⚡ Procedural Designer Synth (Offline)</option>
+                  </select>
+                </div>
+
+                <div class="control-group">
+                  <label for="nb-mode">Modo de Operação</label>
+                  <select id="nb-mode">
+                    <option value="text2img">Criar do Zero (Text-to-Image)</option>
+                    <option value="remix-source">Remix da Foto Atual (Img-to-Img)</option>
+                    <option value="remix-output">Hybrid Feedback (Usar Efeito do Palco)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="control-group">
+                <label for="nb-api-key">Google Gemini API Key (Salva localmente no seu navegador)</label>
+                <div class="nb-key-row">
+                  <input type="password" id="nb-api-key" placeholder="AIzaSy... (ou deixe vazio para usar o Gerador Procedural Offline)" spellcheck="false" />
+                  <button class="btn btn-secondary btn-sm" id="btn-toggle-nb-key" type="button" title="Mostrar/Ocultar chave">👁</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="nb-card">
+              <div class="section-header">
+                <span class="section-title">02. DIREÇÃO DE ARTE PARA DESIGNERS</span>
+              </div>
+
+              <div class="control-group">
+                <label for="nb-lighting">💡 Iluminação & Contraste Tonal</label>
+                <select id="nb-lighting">
+                  <option value="chiaroscuro">Chiaroscuro Dramático (Luz Lateral Dura — Ideal p/ ASCII & 1-Bit)</option>
+                  <option value="rimlight">Rim Light / Contorno de Luz Recortado (Ideal p/ Luma Mesh & Plexus)</option>
+                  <option value="studio_highkey">Estúdio Editorial Softbox (Gradientes Suaves — Ideal p/ Halftone)</option>
+                  <option value="neon_cyber">Bicolor Cyberpunk Neon (Ciano & Magenta — Ideal p/ VHS & Glitch)</option>
+                  <option value="silhouette">Silhueta Minimalista de Contraste Extremo (Stencil / Xerox)</option>
+                </select>
+              </div>
+
+              <div class="control-group">
+                <label for="nb-material">🎨 Materialidade & Estética de Superfície</label>
+                <select id="nb-material">
+                  <option value="marble">Escultura em Mármore / Gesso Clássico Fosco (Pureza Tonal)</option>
+                  <option value="chrome">Metal Líquido / Cromo Especular 3D (Reflexos de Alto Contraste)</option>
+                  <option value="brutalist">Design Brutalista / Geometria Arquitetônica Bauhaus</option>
+                  <option value="editorial">Fotografia Editorial Analógica Médio-Formato 80mm</option>
+                  <option value="cyber_mech">Biomecânico / Android Hardware & Cabos Industriais</option>
+                  <option value="botanical">Botânica Macro / Fibonacci & Estrutura Orgânica</option>
+                </select>
+              </div>
+
+              <div class="two-col-controls">
+                <div class="control-group">
+                  <label for="nb-lens">📷 Lente & Enquadramento</label>
+                  <select id="nb-lens">
+                    <option value="portrait_85mm">Close-up Retrato 85mm f/1.4</option>
+                    <option value="isometric">Projeção Isométrica 3D</option>
+                    <option value="wide_24mm">Grande Angular 24mm Dramática</option>
+                    <option value="macro">Macro Extremo 100mm</option>
+                    <option value="topdown">Vista Superior Simétrica</option>
+                  </select>
+                </div>
+
+                <div class="control-group">
+                  <label for="nb-aspect">📐 Proporção do Palco</label>
+                  <select id="nb-aspect">
+                    <option value="4:3">4:3 Clássico (760×560)</option>
+                    <option value="1:1">1:1 Quadrado (720×720)</option>
+                    <option value="16:9">16:9 Widescreen (880×495)</option>
+                    <option value="3:4">3:4 Poster Vertical (560×746)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="control-group">
+                <label for="nb-background">⬛ Tratamento de Fundo (Isolamento de Ruído)</label>
+                <select id="nb-background">
+                  <option value="pitch_black">Fundo Preto Puro Isolado (#000000 — Zero Ruído no Fundo)</option>
+                  <option value="radial_halo">Vinheta Escura com Halo Geométrico Central</option>
+                  <option value="paper_white">Fundo Branco Infinito de Estúdio (#FFFFFF)</option>
+                  <option value="env_depth">Cenário com Profundidade & Grid Perspectivo</option>
+                </select>
+              </div>
+
+              <div class="checkbox-row">
+                <label class="toggle-label">
+                  <input type="checkbox" id="nb-optimize-engine" checked />
+                  <span>🎯 Pré-Otimizar Distribuição Tonal para o Motor Ativo (<b id="nb-active-engine-label">ASCII</b>)</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column: Prompt Briefing, Compiled Preview & Session Gallery -->
+          <div class="nb-col nb-col-prompt">
+            <div class="nb-card">
+              <div class="section-header">
+                <span class="section-title">03. BRIEFING VISUAL & CONCEITO</span>
+              </div>
+
+              <div class="nb-idea-chips">
+                <button type="button" class="nb-chip" data-nb-idea="Busto escultural de astronauta antigo com visor geométrico rachado">🗿 Astronauta Clássico</button>
+                <button type="button" class="nb-chip" data-nb-idea="Crânio cibernético cromado conectado a cabos ópticos translúcidos">💀 Crânio Cyber Chrome</button>
+                <button type="button" class="nb-chip" data-nb-idea="Olho humano em macro extremo refletindo uma grade arquitetônica neon">👁 Olho Macro Neon</button>
+                <button type="button" class="nb-chip" data-nb-idea="Mão escultural segurando uma esfera de vidro refrativa flutuante">✋ Esfera Refrativa</button>
+                <button type="button" class="nb-chip" data-nb-idea="Monólito brutalista com escadarias impossíveis e esfera metálica">🏛 Monólito Brutalista</button>
+              </div>
+
+              <div class="control-group">
+                <label for="nb-prompt">Descrição do Sujeito / Cena Principal</label>
+                <textarea id="nb-prompt" rows="2" placeholder="Descreva o sujeito ou composição desejada...">Busto escultural de astronauta antigo com visor geométrico rachado</textarea>
+              </div>
+
+              <div class="control-group">
+                <label for="nb-negative">Restrições / Negative Prompt (O que evitar)</label>
+                <input type="text" id="nb-negative" value="sem fundo poluído, sem texto borrado, sem baixo contraste" />
+              </div>
+
+              <div class="control-group">
+                <div class="control-label-row">
+                  <label>Prompt Técnico Compilado (Engenharia de Direção de Arte)</label>
+                  <button type="button" class="btn-link" id="btn-nb-copy-prompt">📋 Copiar Prompt</button>
+                </div>
+                <pre class="nb-compiled-box" id="nb-compiled-preview"></pre>
+              </div>
+
+              <div class="nb-action-buttons">
+                <button type="button" class="btn btn-nanobanana" id="btn-nb-generate">
+                  🍌 Gerar com Nano Banana AI
+                </button>
+                <button type="button" class="btn btn-secondary" id="btn-nb-procedural" title="Gera instantaneamente uma composição paramétrica offline baseada nas diretrizes acima">
+                  ⚡ Sintetizar Procedural (Offline)
+                </button>
+              </div>
+            </div>
+
+            <div class="nb-card nb-gallery-card">
+              <div class="section-header">
+                <span class="section-title">04. GALERIA DE GERAÇÕES DA SESSÃO</span>
+                <span class="control-value" id="nb-gallery-count">0 itens</span>
+              </div>
+              <div class="nb-gallery-grid" id="nb-gallery">
+                <p class="nb-gallery-empty">Suas imagens geradas aparecerão aqui para troca rápida com 1 clique.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Toast Notification -->
     <div id="toast" class="toast hidden"></div>
   </div>
@@ -1097,6 +1277,7 @@
   <script src="js/preprocess.js"></script>
   <script src="js/postfx.js"></script>
   <script src="js/audio.js"></script>
+  <script src="js/nanobanana.js"></script>
   <script src="js/engines/ascii.js"></script>
   <script src="js/engines/bitmap.js"></script>
   <script src="js/engines/halftone.js"></script>
