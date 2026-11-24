@@ -136,8 +136,9 @@
   }
 
   /**
-   * Chama o motor Nano Banana 2.1 / Pro / Lite (Google Gemini Interactions API v1/v1beta) no navegador.
-   * Suporta Text-to-Image e Image-to-Image (Remix do palco atual) com fallback automático.
+   * Chama o motor Nano Banana / Gemini Image Generation API no navegador (100% compatível com CORS no Safari/Chrome/GitHub Pages).
+   * Usa ?key= na URL sem cabeçalhos customizados que bloqueiam o preflight CORS ("Load failed"),
+   * e descobre automaticamente os modelos de imagem disponíveis na chave do usuário.
    */
   async function generateWithNanoBananaApi(config, activeEngineMode, referenceCanvas) {
     const apiKey = (config.apiKey || getSavedApiKey()).trim();
@@ -148,50 +149,113 @@
     saveApiKey(apiKey);
     const compiledPrompt = compileDesignerPrompt(config, activeEngineMode);
     const dims = getTargetDimensions(config.aspectRatio);
+    const refForApi = config.mode !== 'text2img' ? referenceCanvas : null;
 
-    const candidateModels =
-      config.model && config.model !== 'offline-synth'
-        ? [config.model, 'gemini-nano-banana-2.1', 'gemini-3.1-flash-lite-image', 'gemini-3-pro-image']
-        : ['gemini-nano-banana-2.1', 'gemini-3.1-flash-lite-image', 'gemini-3-pro-image'];
+    // 1. Montar fila de modelos candidatos (incluindo descoberta dinâmica da conta do usuário)
+    const defaultCandidates = [
+      config.model,
+      'gemini-2.5-flash-image',
+      'gemini-2.5-flash-image-preview',
+      'gemini-2.0-flash-preview-image-generation',
+      'gemini-2.0-flash-exp-image-generation',
+      'gemini-nano-banana-2.1',
+      'gemini-3.1-flash-lite-image',
+      'gemini-3-pro-image',
+      'imagen-3.0-generate-002'
+    ].filter((m) => m && m !== 'offline-synth' && m !== 'auto');
 
-    const uniqueModels = [...new Set(candidateModels)];
-    let lastError = null;
+    // Descobrir modelos habilitados na chave do usuário via GET /v1beta/models
+    let discoveredModels = [];
+    try {
+      discoveredModels = await discoverAvailableImageModels(apiKey);
+    } catch (e) {}
 
-    for (const modelName of uniqueModels) {
+    const allCandidates = [...new Set([...discoveredModels, ...defaultCandidates])];
+    const errors = [];
+
+    for (const rawModel of allCandidates) {
+      const modelName = rawModel.replace(/^models\//, '');
+
+      // Se for modelo da família Imagen (:predict)
+      if (modelName.startsWith('imagen-') && !refForApi) {
+        try {
+          const imgCanvas = await callImagenPredictEndpoint(
+            apiKey,
+            modelName,
+            compiledPrompt,
+            config.aspectRatio,
+            dims
+          );
+          return { canvas: imgCanvas, prompt: compiledPrompt, modelUsed: modelName };
+        } catch (err) {
+          errors.push(`${modelName}: ${err.message}`);
+          continue;
+        }
+      }
+
+      // Tentativa principal CORS-safe via :generateContent?key=...
+      try {
+        const imgCanvas = await callGeminiGenerateContentImage(
+          apiKey,
+          modelName,
+          compiledPrompt,
+          refForApi,
+          dims
+        );
+        return { canvas: imgCanvas, prompt: compiledPrompt, modelUsed: modelName };
+      } catch (err) {
+        errors.push(`${modelName}: ${err.message}`);
+      }
+
+      // Tentativa secundária CORS-safe via /v1beta/interactions?key=... (sem headers bloqueados por preflight)
       try {
         const imgCanvas = await callGeminiInteractionsImage(
           apiKey,
           modelName,
           compiledPrompt,
-          config.mode !== 'text2img' ? referenceCanvas : null,
+          refForApi,
           config.aspectRatio,
           dims
         );
         return { canvas: imgCanvas, prompt: compiledPrompt, modelUsed: modelName };
-      } catch (err) {
-        lastError = err;
-        // Fallback compatível caso o endpoint :generateContent seja requerido no ambiente
-        try {
-          const fallbackCanvas = await callGeminiGenerateContentImage(
-            apiKey,
-            modelName,
-            compiledPrompt,
-            config.mode !== 'text2img' ? referenceCanvas : null,
-            dims
-          );
-          return { canvas: fallbackCanvas, prompt: compiledPrompt, modelUsed: modelName };
-        } catch (fallbackErr) {}
-      }
+      } catch (err) {}
     }
 
-    throw lastError || new Error('Não foi possível gerar a imagem via API. Verifique sua chave Gemini API.');
+    const detailedErr = errors.find((e) => !e.includes('404') && !e.includes('not found')) || errors[0] || 'Verifique sua Gemini API Key.';
+    throw new Error(detailedErr);
   }
 
   /**
-   * Chamada oficial via Gemini Interactions API (POST /v1beta/interactions) para Nano Banana 2.1 / Pro / 2 Lite
+   * Consulta GET /v1beta/models?key=... para descobrir quais modelos de geração de imagem estão ativos na chave do usuário
+   */
+  async function discoverAvailableImageModels(apiKey) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`;
+    const resp = await fetch(url, { method: 'GET' });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    const models = data.models || [];
+    const found = [];
+
+    for (const m of models) {
+      const name = (m.name || '').replace(/^models\//, '');
+      if (
+        name.includes('image') ||
+        name.includes('banana') ||
+        name.includes('imagen') ||
+        name === 'gemini-2.0-flash-exp'
+      ) {
+        found.push(name);
+      }
+    }
+    return found;
+  }
+
+  /**
+   * Chamada CORS-safe via Gemini Interactions API (POST /v1beta/interactions?key=...)
+   * Sem headers não-padrão (como Api-Revision) que causam "TypeError: Load failed" no Safari/WebKit.
    */
   async function callGeminiInteractionsImage(apiKey, modelName, promptText, refCanvas, aspectRatio, dims) {
-    const url = 'https://generativelanguage.googleapis.com/v1beta/interactions';
+    const url = `https://generativelanguage.googleapis.com/v1beta/interactions?key=${encodeURIComponent(apiKey)}`;
 
     const inputItems = [{ type: 'text', text: promptText }];
     if (refCanvas) {
@@ -217,9 +281,7 @@
     const resp = await fetch(url, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
-        'Api-Revision': '2026-05-20'
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify(body)
     });
@@ -236,13 +298,11 @@
     const data = await resp.json();
     const interaction = data.interaction || data;
 
-    // 1. Verificar helper direto output_image
     if (interaction.output_image && interaction.output_image.data) {
       const mime = interaction.output_image.mime_type || 'image/png';
       return await base64ToCanvas(`data:${mime};base64,${interaction.output_image.data}`, dims.width, dims.height);
     }
 
-    // 2. Iterar sobre steps (model_output -> content -> image)
     const steps = interaction.steps || [];
     for (let i = steps.length - 1; i >= 0; i--) {
       const step = steps[i];
@@ -256,7 +316,7 @@
       }
     }
 
-    throw new Error(`O modelo ${modelName} não retornou uma imagem na resposta Interactions.`);
+    throw new Error(`O modelo ${modelName} não retornou uma imagem.`);
   }
 
   async function callGeminiGenerateContentImage(apiKey, modelName, promptText, refCanvas, dims) {
