@@ -136,60 +136,127 @@
   }
 
   /**
-   * Chama o motor Nano Banana (Google Gemini Image Generation API) no navegador.
-   * Suporta Text-to-Image e Image-to-Image (Remix do palco atual) com fallback automático de modelos.
+   * Chama o motor Nano Banana 2.1 / Pro / Lite (Google Gemini Interactions API v1/v1beta) no navegador.
+   * Suporta Text-to-Image e Image-to-Image (Remix do palco atual) com fallback automático.
    */
   async function generateWithNanoBananaApi(config, activeEngineMode, referenceCanvas) {
     const apiKey = (config.apiKey || getSavedApiKey()).trim();
     if (!apiKey) {
-      throw new Error('Insira sua Gemini API Key (Google AI Studio) ou use o botão "Gerar Procedural Offline".');
+      throw new Error('Insira sua Gemini API Key (Google AI Studio) ou use o botão "Sintetizar Procedural Offline".');
     }
 
     saveApiKey(apiKey);
     const compiledPrompt = compileDesignerPrompt(config, activeEngineMode);
     const dims = getTargetDimensions(config.aspectRatio);
 
-    // Se o usuário escolheu Imagen 3 explicitamente
-    if (config.model === 'imagen-3.0-generate-002' && config.mode === 'text2img') {
-      try {
-        const imgCanvas = await callImagenPredictEndpoint(
-          apiKey,
-          'imagen-3.0-generate-002',
-          compiledPrompt,
-          config.aspectRatio,
-          dims
-        );
-        return { canvas: imgCanvas, prompt: compiledPrompt, modelUsed: 'imagen-3.0-generate-002' };
-      } catch (imagenErr) {
-        // Fallback automático para Nano Banana (gemini-2.5-flash-image)
-      }
-    }
-
-    // Lista de modelos Nano Banana em ordem de prioridade
     const candidateModels =
-      config.model && config.model !== 'offline-synth' && config.model !== 'imagen-3.0-generate-002'
-        ? [config.model, 'gemini-2.5-flash-image', 'gemini-2.0-flash-exp-image-generation']
-        : ['gemini-2.5-flash-image', 'gemini-2.0-flash-exp-image-generation'];
+      config.model && config.model !== 'offline-synth'
+        ? [config.model, 'gemini-nano-banana-2.1', 'gemini-3.1-flash-lite-image', 'gemini-3-pro-image']
+        : ['gemini-nano-banana-2.1', 'gemini-3.1-flash-lite-image', 'gemini-3-pro-image'];
 
     const uniqueModels = [...new Set(candidateModels)];
     let lastError = null;
 
     for (const modelName of uniqueModels) {
       try {
-        const imgCanvas = await callGeminiGenerateContentImage(
+        const imgCanvas = await callGeminiInteractionsImage(
           apiKey,
           modelName,
           compiledPrompt,
           config.mode !== 'text2img' ? referenceCanvas : null,
+          config.aspectRatio,
           dims
         );
         return { canvas: imgCanvas, prompt: compiledPrompt, modelUsed: modelName };
       } catch (err) {
         lastError = err;
+        // Fallback compatível caso o endpoint :generateContent seja requerido no ambiente
+        try {
+          const fallbackCanvas = await callGeminiGenerateContentImage(
+            apiKey,
+            modelName,
+            compiledPrompt,
+            config.mode !== 'text2img' ? referenceCanvas : null,
+            dims
+          );
+          return { canvas: fallbackCanvas, prompt: compiledPrompt, modelUsed: modelName };
+        } catch (fallbackErr) {}
       }
     }
 
     throw lastError || new Error('Não foi possível gerar a imagem via API. Verifique sua chave Gemini API.');
+  }
+
+  /**
+   * Chamada oficial via Gemini Interactions API (POST /v1beta/interactions) para Nano Banana 2.1 / Pro / 2 Lite
+   */
+  async function callGeminiInteractionsImage(apiKey, modelName, promptText, refCanvas, aspectRatio, dims) {
+    const url = 'https://generativelanguage.googleapis.com/v1beta/interactions';
+
+    const inputItems = [{ type: 'text', text: promptText }];
+    if (refCanvas) {
+      const dataUrl = refCanvas.toDataURL('image/png');
+      const base64Data = dataUrl.split(',')[1];
+      inputItems.push({
+        type: 'image',
+        mime_type: 'image/png',
+        data: base64Data
+      });
+    }
+
+    const body = {
+      model: modelName,
+      input: inputItems,
+      response_format: {
+        type: 'image',
+        mime_type: 'image/png',
+        aspect_ratio: aspectRatio || '4:3'
+      }
+    };
+
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+        'Api-Revision': '2026-05-20'
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!resp.ok) {
+      let errMsg = `Erro HTTP ${resp.status}`;
+      try {
+        const errJson = await resp.json();
+        errMsg = errJson.error?.message || errMsg;
+      } catch (e) {}
+      throw new Error(errMsg);
+    }
+
+    const data = await resp.json();
+    const interaction = data.interaction || data;
+
+    // 1. Verificar helper direto output_image
+    if (interaction.output_image && interaction.output_image.data) {
+      const mime = interaction.output_image.mime_type || 'image/png';
+      return await base64ToCanvas(`data:${mime};base64,${interaction.output_image.data}`, dims.width, dims.height);
+    }
+
+    // 2. Iterar sobre steps (model_output -> content -> image)
+    const steps = interaction.steps || [];
+    for (let i = steps.length - 1; i >= 0; i--) {
+      const step = steps[i];
+      if (step.type === 'model_output' && Array.isArray(step.content)) {
+        for (const item of step.content) {
+          if (item.type === 'image' && item.data) {
+            const mime = item.mime_type || 'image/png';
+            return await base64ToCanvas(`data:${mime};base64,${item.data}`, dims.width, dims.height);
+          }
+        }
+      }
+    }
+
+    throw new Error(`O modelo ${modelName} não retornou uma imagem na resposta Interactions.`);
   }
 
   async function callGeminiGenerateContentImage(apiKey, modelName, promptText, refCanvas, dims) {
