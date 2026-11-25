@@ -938,6 +938,109 @@ canvas {
   z-index: 100;
 }
 
+.toolbar-select {
+  width: auto;
+  padding: 3px 8px;
+  font-size: 11px;
+  background: var(--bg-root);
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  color: var(--text-primary);
+}
+
+.export-png-group {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg-root);
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.export-png-group select {
+  width: auto;
+  border: none;
+  background: transparent;
+  padding: 4px 6px;
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 600;
+  border-right: 1px solid rgba(0, 230, 118, 0.35);
+  border-radius: 0;
+}
+
+.export-png-group .btn-primary {
+  border: none;
+  border-radius: 0;
+}
+
+.canvas-wrapper.transparent-checker {
+  background-color: #12151c;
+  background-image:
+    linear-gradient(45deg, #1b202b 25%, transparent 25%),
+    linear-gradient(-45deg, #1b202b 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #1b202b 75%),
+    linear-gradient(-45deg, transparent 75%, #1b202b 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}
+
+/* Social Media Safe Zone Overlay */
+.safe-zone-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 12;
+  border: 1px dashed rgba(0, 230, 118, 0.45);
+}
+
+.sz-top,
+.sz-bottom,
+.sz-right {
+  position: absolute;
+  background: rgba(255, 51, 102, 0.14);
+  border: 1px dashed rgba(255, 51, 102, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.75);
+  letter-spacing: 0.5px;
+}
+
+.sz-top {
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 11%;
+}
+
+.sz-bottom {
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 18%;
+}
+
+.sz-right {
+  top: 28%;
+  bottom: 20%;
+  right: 0;
+  width: 14%;
+  writing-mode: vertical-rl;
+}
+
+.sz-center-cross {
+  position: absolute;
+  top: 11%;
+  bottom: 18%;
+  left: 6%;
+  right: 14%;
+  border: 1px dashed rgba(0, 230, 118, 0.5);
+}
+
 .hidden {
   display: none !important;
 }
@@ -1684,6 +1787,16 @@ canvas {
           </div>
 
           <div class="view-controls">
+            <select id="social-aspect" class="toolbar-select" title="Enquadramento e Proporção para Redes Sociais">
+              <option value="original">📐 Formato: Original</option>
+              <option value="4:5">📐 4:5 (Feed IG)</option>
+              <option value="9:16">📐 9:16 (Reels / Stories)</option>
+              <option value="1:1">📐 1:1 (Quadrado)</option>
+              <option value="16:9">📐 16:9 (Widescreen)</option>
+            </select>
+            <button class="btn btn-ghost btn-sm" id="btn-safe-zone" title="Mostrar/Ocultar Guias de Safe Zone do Instagram/TikTok (Tecla G — não sai na exportação)">
+              🛡️ Safe Zone
+            </button>
             <button class="btn btn-ghost btn-sm" id="btn-split-compare" title="Ativar cortina deslizante Antes / Depois (Tecla C)">
               ◫ Cortina Antes/Depois
             </button>
@@ -1704,6 +1817,14 @@ canvas {
           <div class="canvas-wrapper" id="canvas-wrapper">
             <canvas id="output-canvas"></canvas>
             <canvas id="original-canvas" class="hidden"></canvas>
+
+            <!-- Non-Exported Social Media Safe Zone Guides -->
+            <div class="safe-zone-overlay hidden" id="safe-zone-overlay">
+              <div class="sz-top"><span>UI TOPO / STORIES</span></div>
+              <div class="sz-right"><span>ÍCONES REELS</span></div>
+              <div class="sz-bottom"><span>ÁREA DE LEGENDA & ÁUDIO</span></div>
+              <div class="sz-center-cross"></div>
+            </div>
 
             <!-- Draggable Split-Screen Curtain Handle -->
             <div class="split-divider hidden" id="split-divider">
@@ -1726,11 +1847,11 @@ canvas {
         <!-- Bottom Export Bar -->
         <footer class="export-bar">
           <div class="export-hint">
-            <span>Atalhos: <kbd>Espaço</kbd> Play • <kbd>C</kbd> Cortina • <kbd>D</kbd> Surprise • <kbd>I</kbd> Inverter • <kbd>Ctrl+Z</kbd> Undo</span>
+            <span>Atalhos: <kbd>Espaço</kbd> Play • <kbd>C</kbd> Cortina • <kbd>G</kbd> Safe Zone • <kbd>D</kbd> Surprise • <kbd>Ctrl+Z</kbd> Undo</span>
           </div>
           <div class="export-buttons">
-            <button class="btn btn-secondary btn-sm" id="btn-copy-ascii" title="Copiar arte em texto para a área de transferência">
-              📋 Copiar
+            <button class="btn btn-secondary btn-sm" id="btn-copy-ascii" title="Copiar arte em texto ASCII para a área de transferência">
+              📋 TXT
             </button>
             <button class="btn btn-secondary btn-sm" id="btn-export-txt" title="Baixar arquivo de texto (.txt)">
               ⬇ TXT
@@ -1752,14 +1873,24 @@ canvas {
                 <option value="5" selected>Loop 5s</option>
                 <option value="10">Loop 10s</option>
               </select>
-              <button class="btn btn-record btn-sm" id="btn-record-video" title="Gravar animação em vídeo (.webm) — Tecla R">
+              <button class="btn btn-record btn-sm" id="btn-record-video" title="Gravar animação em vídeo (.mp4 / .webm) — Tecla R">
                 ⏺ Gravar Vídeo
               </button>
             </div>
 
-            <button class="btn btn-primary btn-sm" id="btn-export-png" title="Baixar quadro atual em alta resolução (.png)">
-              ⬇ Exportar PNG
+            <button class="btn btn-accent-outline btn-sm" id="btn-copy-png" title="Copiar imagem PNG direto para o Clipboard para colar (Cmd+V) no Figma ou Photoshop">
+              📋 Copiar PNG
             </button>
+
+            <div class="export-png-group">
+              <select id="export-scale" title="Resolução de exportação PNG (1x padrão ou 2x Super-Sampling HD para Social Media)">
+                <option value="1">1× Padrão</option>
+                <option value="2" selected>2× HD Social</option>
+              </select>
+              <button class="btn btn-primary btn-sm" id="btn-export-png" title="Baixar quadro atual em alta resolução (.png)">
+                ⬇ Exportar PNG
+              </button>
+            </div>
           </div>
         </footer>
       </main>
@@ -1968,6 +2099,13 @@ canvas {
 
           <div class="checkbox-row" style="margin-top: 10px;">
             <label class="toggle-label">
+              <input type="checkbox" id="transparent-bg" />
+              <span>🏁 Fundo Transparente (Recorte Alpha p/ Figma & PS)</span>
+            </label>
+          </div>
+
+          <div class="checkbox-row" style="margin-top: 6px;">
+            <label class="toggle-label">
               <input type="checkbox" id="duotone-enabled" />
               <span>Colorizar Qualquer Motor (Duotone Universal)</span>
             </label>
@@ -1982,11 +2120,39 @@ canvas {
           </div>
         </section>
 
-        <!-- 07. Global Post-FX Rack -->
+        <!-- 07. Global Post-FX Rack & Subject Focus Mask -->
         <section class="panel-section">
           <div class="section-header">
-            <span class="section-title">07. RACK PÓS-EFEITOS (POST-FX)</span>
+            <span class="section-title">07. PÓS-EFEITOS & MÁSCARA DE FOCO</span>
             <button class="btn-link" id="btn-reset-postfx" title="Zerar efeitos de pós-processamento">Zerar</button>
+          </div>
+
+          <div class="control-group">
+            <label for="focus-mask-mode">🎭 Máscara de Proteção de Sujeito (Rosto / Produto)</label>
+            <select id="focus-mask-mode">
+              <option value="none">Sem Máscara (Efeito em 100% da Imagem)</option>
+              <option value="center-clean">Proteger Centro (Sujeito Nítido, Efeito nas Bordas)</option>
+              <option value="edges-clean">Foco no Centro (Efeito no Centro, Bordas Originais)</option>
+              <option value="vertical-fade">Degradê Vertical (Topo Original → Base com Efeito)</option>
+            </select>
+          </div>
+
+          <div class="two-col-controls">
+            <div class="control-group">
+              <div class="control-label-row">
+                <label for="focus-mask-radius">Raio da Máscara</label>
+                <span class="control-value" id="val-focus-mask-radius">55%</span>
+              </div>
+              <input type="range" id="focus-mask-radius" min="15" max="95" step="5" value="55" />
+            </div>
+
+            <div class="control-group">
+              <div class="control-label-row">
+                <label for="original-mix">Mix c/ Original</label>
+                <span class="control-value" id="val-original-mix">0%</span>
+              </div>
+              <input type="range" id="original-mix" min="0" max="90" step="5" value="0" />
+            </div>
           </div>
 
           <div class="two-col-controls">
@@ -2436,6 +2602,7 @@ canvas {
   const { preprocessImage, hexToRgb } = DegenLab;
 
   let bloomCanvas = null;
+  let maskCanvas = null;
 
   /**
    * Renderiza o Histograma de Luminância em Tempo Real (64 bins)
@@ -2474,7 +2641,6 @@ canvas {
     ctx.fillStyle = '#07090d';
     ctx.fillRect(0, 0, w, h);
 
-    // Grade de fundo técnica
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
     ctx.lineWidth = 1;
     for (let gx = 0.25; gx < 1; gx += 0.25) {
@@ -2484,7 +2650,6 @@ canvas {
       ctx.stroke();
     }
 
-    // Desenhar curva preenchida do histograma
     const grad = ctx.createLinearGradient(0, 0, 0, h);
     grad.addColorStop(0, 'rgba(0, 230, 118, 0.65)');
     grad.addColorStop(1, 'rgba(0, 230, 118, 0.05)');
@@ -2502,7 +2667,6 @@ canvas {
     ctx.fillStyle = grad;
     ctx.fill();
 
-    // Linha de topo do histograma
     ctx.beginPath();
     for (let i = 0; i < 64; i++) {
       const x = (i / 63) * w;
@@ -2515,7 +2679,6 @@ canvas {
     ctx.lineWidth = 1.4;
     ctx.stroke();
 
-    // Marcadores visuais de limiar (quando em Bitmap ou Pixel Sort)
     if (state.mode === 'bitmap') {
       const tx = ((state.bitmapThreshold ?? 128) / 255) * w;
       ctx.strokeStyle = '#ffb000';
@@ -2536,10 +2699,14 @@ canvas {
   }
 
   /**
-   * Aplica o Rack de Pós-Processamento Global (Duotone Universal, Phosphor Bloom, Scanlines e Vinheta CRT)
-   * sobre a saída de qualquer um dos 12 motores.
+   * Aplica o Rack de Pós-Processamento Global:
+   * - Duotone Universal & Aberração Cromática Final
+   * - Phosphor Bloom / Neon Glow
+   * - Scanlines & Vinheta CRT
+   * - Máscara de Foco (Proteger Rosto/Produto no Centro ou Topo) + Mix com Foto Original
+   * - Recorte de Fundo Transparente (Alpha Channel Cutout para Figma/Photoshop)
    */
-  function applyGlobalPostFx(outputCanvas, state) {
+  function applyGlobalPostFx(outputCanvas, state, sourceCanvas) {
     const w = outputCanvas.width;
     const h = outputCanvas.height;
     if (!w || !h) return;
@@ -2554,9 +2721,10 @@ canvas {
     const scanlinesAmt = (state.postScanlines ?? 0) / 100;
     const vignetteAmt = (state.postVignette ?? 0) / 100;
     const chromaShift = Math.round((state.postChroma ?? 0) + audioHigh * 6);
+    const transparentBg = Boolean(state.transparentBg);
 
-    // 1. Duotone Color Grading Universal + Aberração Cromática Final (por manipulação de buffer)
-    if (duotoneOn || chromaShift > 0) {
+    // 1. Duotone Color Grading Universal + Aberração Cromática Final + Recorte Alpha Transparente
+    if (duotoneOn || chromaShift > 0 || transparentBg) {
       const imgData = ctx.getImageData(0, 0, w, h);
       const data = imgData.data;
       const srcCopy = chromaShift > 0 ? new Uint8ClampedArray(data) : null;
@@ -2592,6 +2760,19 @@ canvas {
             data[idx] = Math.round(r * (1 - duotoneMix) + dr * duotoneMix);
             data[idx + 1] = Math.round(g * (1 - duotoneMix) + dg * duotoneMix);
             data[idx + 2] = Math.round(b * (1 - duotoneMix) + db * duotoneMix);
+          }
+
+          if (transparentBg) {
+            // Calcular distância cromática em relação à cor de fundo (bgColor) para preservar anti-aliasing suave
+            const dr = data[idx] - bg.r;
+            const dg = data[idx + 1] - bg.g;
+            const db = data[idx + 2] - bg.b;
+            const dist = Math.sqrt(dr * dr + dg * dg + db * db);
+            if (dist < 14) {
+              data[idx + 3] = 0;
+            } else if (dist < 64) {
+              data[idx + 3] = Math.round(((dist - 14) / 50) * 255);
+            }
           }
         }
       }
@@ -2632,7 +2813,7 @@ canvas {
     }
 
     // 4. Lente CRT Curva & Vinheta
-    if (vignetteAmt > 0.02) {
+    if (vignetteAmt > 0.02 && !transparentBg) {
       ctx.save();
       const cx = w * 0.5;
       const cy = h * 0.5;
@@ -2647,12 +2828,77 @@ canvas {
       ctx.fillStyle = vGrad;
       ctx.fillRect(0, 0, w, h);
 
-      // Moldura arredondada sutil de tubo CRT
       if (vignetteAmt > 0.35) {
         ctx.strokeStyle = `rgba(0,0,0,${(vignetteAmt * 0.75).toFixed(2)})`;
         ctx.lineWidth = Math.max(6, Math.min(w, h) * 0.022 * vignetteAmt);
         ctx.strokeRect(0, 0, w, h);
       }
+      ctx.restore();
+    }
+
+    // 5. Máscara de Foco (Proteger Sujeito / Rosto / Produto) & Mix com Foto Original
+    const focusMode = state.focusMaskMode || 'none';
+    const originalMix = (state.originalMix ?? 0) / 100;
+
+    if (sourceCanvas && (focusMode !== 'none' || originalMix > 0.01)) {
+      applyFocusMaskAndMix(ctx, sourceCanvas, w, h, focusMode, (state.focusMaskRadius ?? 55) / 100, originalMix);
+    }
+  }
+
+  function applyFocusMaskAndMix(ctx, sourceCanvas, w, h, focusMode, radiusNorm, originalMix) {
+    if (!maskCanvas) {
+      maskCanvas = document.createElement('canvas');
+    }
+    maskCanvas.width = w;
+    maskCanvas.height = h;
+    const mCtx = maskCanvas.getContext('2d');
+    mCtx.clearRect(0, 0, w, h);
+
+    // Desenhar a foto original no maskCanvas
+    mCtx.drawImage(sourceCanvas, 0, 0, w, h);
+
+    if (focusMode !== 'none') {
+      // Aplicar máscara de recorte alfa usando destination-in
+      mCtx.globalCompositeOperation = 'destination-in';
+      const cx = w * 0.5;
+      const cy = h * 0.5;
+      const maxR = Math.hypot(cx, cy);
+
+      if (focusMode === 'center-clean') {
+        // Centro mostra a foto original nítida; bordas mostram o efeito generativo
+        const innerR = maxR * Math.max(0.05, radiusNorm * 0.45);
+        const outerR = maxR * Math.min(1.0, radiusNorm * 0.95 + 0.12);
+        const g = mCtx.createRadialGradient(cx, cy, innerR, cx, cy, outerR);
+        g.addColorStop(0, 'rgba(0,0,0,1)');
+        g.addColorStop(1, `rgba(0,0,0,${originalMix.toFixed(2)})`);
+        mCtx.fillStyle = g;
+        mCtx.fillRect(0, 0, w, h);
+      } else if (focusMode === 'edges-clean') {
+        // Centro tem o efeito generativo; bordas preservam a foto original
+        const innerR = maxR * Math.max(0.08, radiusNorm * 0.38);
+        const outerR = maxR * Math.min(1.0, radiusNorm * 0.88 + 0.1);
+        const g = mCtx.createRadialGradient(cx, cy, innerR, cx, cy, outerR);
+        g.addColorStop(0, `rgba(0,0,0,${originalMix.toFixed(2)})`);
+        g.addColorStop(1, 'rgba(0,0,0,1)');
+        mCtx.fillStyle = g;
+        mCtx.fillRect(0, 0, w, h);
+      } else if (focusMode === 'vertical-fade') {
+        // Degradê vertical para posts de Feed/Stories
+        const splitY = h * radiusNorm;
+        const feather = h * 0.25;
+        const g = mCtx.createLinearGradient(0, Math.max(0, splitY - feather), 0, Math.min(h, splitY + feather));
+        g.addColorStop(0, 'rgba(0,0,0,1)');
+        g.addColorStop(1, `rgba(0,0,0,${originalMix.toFixed(2)})`);
+        mCtx.fillStyle = g;
+        mCtx.fillRect(0, 0, w, h);
+      }
+
+      mCtx.globalCompositeOperation = 'source-over';
+      ctx.drawImage(maskCanvas, 0, 0);
+    } else if (originalMix > 0.01) {
+      ctx.save();
+      ctx.globalAlpha = originalMix;
+      ctx.drawImage(sourceCanvas, 0, 0, w, h);
       ctx.restore();
     }
   }
@@ -5913,11 +6159,38 @@ canvas {
 (function (global) {
   const DegenLab = (global.DegenLab = global.DegenLab || {});
 
-  function downloadPng(canvas, filename = 'degen-art.png') {
-    canvas.toBlob((blob) => {
+  function getScaledCanvas(canvas, scale = 1) {
+    if (!scale || scale <= 1) return canvas;
+    const out = document.createElement('canvas');
+    out.width = Math.round(canvas.width * scale);
+    out.height = Math.round(canvas.height * scale);
+    const ctx = out.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(canvas, 0, 0, out.width, out.height);
+    return out;
+  }
+
+  function downloadPng(canvas, filename = 'degen-art.png', scale = 1) {
+    const target = getScaledCanvas(canvas, scale);
+    target.toBlob((blob) => {
       if (!blob) return;
       triggerDownload(blob, filename);
     }, 'image/png');
+  }
+
+  /**
+   * Copia a imagem PNG renderizada diretamente para o Clipboard do sistema
+   * permitindo colar (Cmd+V / Ctrl+V) direto no Figma, Photoshop, Illustrator ou Canva!
+   */
+  async function copyCanvasPngToClipboard(canvas, scale = 1) {
+    if (!navigator.clipboard || typeof ClipboardItem === 'undefined') {
+      throw new Error('Clipboard de imagem não suportado neste navegador');
+    }
+    const target = getScaledCanvas(canvas, scale);
+    const blob = await new Promise((resolve) => target.toBlob(resolve, 'image/png'));
+    if (!blob) throw new Error('Falha ao codificar PNG');
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    return true;
   }
 
   function downloadTextFile(content, filename, mimeType = 'text/plain;charset=utf-8') {
@@ -5953,7 +6226,8 @@ canvas {
   }
 
   /**
-   * Inicia gravação de vídeo (.webm) diretamente do Canvas a 30 FPS
+   * Inicia gravação de vídeo priorizando formato nativo .MP4 (H.264) para Social Media / Reels,
+   * com fallback automático para .WebM (VP9/VP8).
    */
   function createCanvasRecorder(canvas, filenamePrefix = 'degen-anim') {
     if (!canvas.captureStream || typeof MediaRecorder === 'undefined') {
@@ -5962,20 +6236,29 @@ canvas {
 
     const stream = canvas.captureStream(30);
     const mimeCandidates = [
-      'video/webm;codecs=vp9',
-      'video/webm;codecs=vp8',
-      'video/webm'
+      { mime: 'video/mp4;codecs=avc1.42E01E,mp4a.40.2', ext: 'mp4' },
+      { mime: 'video/mp4;codecs=avc1', ext: 'mp4' },
+      { mime: 'video/mp4', ext: 'mp4' },
+      { mime: 'video/webm;codecs=vp9', ext: 'webm' },
+      { mime: 'video/webm;codecs=vp8', ext: 'webm' },
+      { mime: 'video/webm', ext: 'webm' }
     ];
-    let mimeType = '';
-    for (const candidate of mimeCandidates) {
-      if (MediaRecorder.isTypeSupported(candidate)) {
-        mimeType = candidate;
+
+    let chosenMime = '';
+    let chosenExt = 'webm';
+    for (const c of mimeCandidates) {
+      if (MediaRecorder.isTypeSupported(c.mime)) {
+        chosenMime = c.mime;
+        chosenExt = c.ext;
         break;
       }
     }
 
-    const options = mimeType ? { mimeType, videoBitsPerSecond: 6000000 } : {};
+    const options = chosenMime
+      ? { mimeType: chosenMime, videoBitsPerSecond: 10000000 }
+      : { videoBitsPerSecond: 10000000 };
     const recorder = new MediaRecorder(stream, options);
+    recorder.fileExtension = chosenExt;
     const chunks = [];
 
     recorder.ondataavailable = (e) => {
@@ -5985,8 +6268,8 @@ canvas {
     };
 
     recorder.onstop = () => {
-      const blob = new Blob(chunks, { type: mimeType || 'video/webm' });
-      triggerDownload(blob, `${filenamePrefix}-${Date.now()}.webm`);
+      const blob = new Blob(chunks, { type: chosenMime || 'video/webm' });
+      triggerDownload(blob, `${filenamePrefix}-${Date.now()}.${chosenExt}`);
     };
 
     recorder.start(100);
@@ -6035,10 +6318,11 @@ canvas {
     state.anim.time = savedTime;
     renderStepFn();
 
-    downloadPng(sheet, `degen-spritesheet-${state.mode}-${Date.now()}.png`);
+    downloadPng(sheet, `degen-spritesheet-${state.mode}-${Date.now()}.png`, 1);
   }
 
   DegenLab.downloadPng = downloadPng;
+  DegenLab.copyCanvasPngToClipboard = copyCanvasPngToClipboard;
   DegenLab.downloadTextFile = downloadTextFile;
   DegenLab.copyToClipboard = copyToClipboard;
   DegenLab.createCanvasRecorder = createCanvasRecorder;
@@ -6084,6 +6368,7 @@ canvas {
     renderWaves,
     buildWavesSvg,
     downloadPng,
+    copyCanvasPngToClipboard,
     downloadTextFile,
     copyToClipboard,
     createCanvasRecorder,
@@ -6104,9 +6389,17 @@ canvas {
     fgColor: '#e8f5e9',
     bgColor: '#0d1117',
 
-    // Duotone Universal & Post-FX Rack
+    // Social Media Framing & Transparency
+    socialAspect: 'original',
+    safeZoneActive: false,
+    transparentBg: false,
+
+    // Duotone Universal, Focus Mask & Post-FX Rack
     duotoneEnabled: false,
     duotoneMix: 85,
+    focusMaskMode: 'none',
+    focusMaskRadius: 55,
+    originalMix: 0,
     postBloom: 0,
     postVignette: 0,
     postScanlines: 0,
@@ -6314,6 +6607,7 @@ canvas {
     }
   };
 
+  let rawSourceCanvas = null;
   let sourceCanvas = null;
   let lastResult = null;
   let renderQueued = false;
@@ -6407,22 +6701,68 @@ canvas {
       h = Math.round(h * ratio);
     }
 
-    if (!sourceCanvas || sourceCanvas.width !== w || sourceCanvas.height !== h) {
-      sourceCanvas = document.createElement('canvas');
-      sourceCanvas.width = w;
-      sourceCanvas.height = h;
-      originalCanvas.width = w;
-      originalCanvas.height = h;
+    if (!rawSourceCanvas || rawSourceCanvas.width !== w || rawSourceCanvas.height !== h) {
+      rawSourceCanvas = document.createElement('canvas');
+      rawSourceCanvas.width = w;
+      rawSourceCanvas.height = h;
     }
 
-    sourceCanvas.getContext('2d').drawImage(imgOrCanvas, 0, 0, w, h);
-    originalCanvas.getContext('2d').drawImage(sourceCanvas, 0, 0);
+    rawSourceCanvas.getContext('2d').drawImage(imgOrCanvas, 0, 0, w, h);
+    applyAspectCropToSource();
 
     updateHistogramUi();
     scheduleRender();
     if (label) {
-      showToast(`✓ ${label} (${w}×${h}px)`);
+      showToast(`✓ ${label} (${sourceCanvas.width}×${sourceCanvas.height}px)`);
     }
+  }
+
+  /**
+   * Aplica o enquadramento não-destrutivo de Social Media (Original, 4:5 Feed, 9:16 Reels, 1:1, 16:9)
+   * usando Center-Cover Crop a partir de rawSourceCanvas.
+   */
+  function applyAspectCropToSource() {
+    if (!rawSourceCanvas) return;
+    const rawW = rawSourceCanvas.width;
+    const rawH = rawSourceCanvas.height;
+
+    let targetW = rawW;
+    let targetH = rawH;
+
+    if (state.socialAspect === '4:5') {
+      targetW = 640;
+      targetH = 800;
+    } else if (state.socialAspect === '9:16') {
+      targetW = 540;
+      targetH = 960;
+    } else if (state.socialAspect === '1:1') {
+      targetW = 720;
+      targetH = 720;
+    } else if (state.socialAspect === '16:9') {
+      targetW = 864;
+      targetH = 486;
+    }
+
+    if (!sourceCanvas || sourceCanvas.width !== targetW || sourceCanvas.height !== targetH) {
+      sourceCanvas = document.createElement('canvas');
+      sourceCanvas.width = targetW;
+      sourceCanvas.height = targetH;
+      originalCanvas.width = targetW;
+      originalCanvas.height = targetH;
+      resetDatamoshBuffer();
+      resetFeedbackBuffer();
+    }
+
+    const scale = Math.max(targetW / rawW, targetH / rawH);
+    const sw = rawW * scale;
+    const sh = rawH * scale;
+    const dx = (targetW - sw) * 0.5;
+    const dy = (targetH - sh) * 0.5;
+
+    const ctx = sourceCanvas.getContext('2d');
+    ctx.clearRect(0, 0, targetW, targetH);
+    ctx.drawImage(rawSourceCanvas, dx, dy, sw, sh);
+    originalCanvas.getContext('2d').drawImage(sourceCanvas, 0, 0);
   }
 
   function updateHistogramUi() {
@@ -6467,10 +6807,10 @@ canvas {
     }
 
     // 2. Atualizar frame de vídeo ou webcam se ativo
-    if (activeVideoEl && activeVideoEl.readyState >= 2) {
-      const w = sourceCanvas.width;
-      const h = sourceCanvas.height;
-      const ctx = sourceCanvas.getContext('2d');
+    if (activeVideoEl && activeVideoEl.readyState >= 2 && rawSourceCanvas) {
+      const w = rawSourceCanvas.width;
+      const h = rawSourceCanvas.height;
+      const ctx = rawSourceCanvas.getContext('2d');
       ctx.save();
       if (isWebcamActive) {
         ctx.translate(w, 0);
@@ -6478,7 +6818,7 @@ canvas {
       }
       ctx.drawImage(activeVideoEl, 0, 0, w, h);
       ctx.restore();
-      originalCanvas.getContext('2d').drawImage(sourceCanvas, 0, 0);
+      applyAspectCropToSource();
     }
 
     performRender();
@@ -6557,8 +6897,9 @@ canvas {
     state.anim.active = prevAnimActive;
     state.anim.intensity = prevAnimIntensity;
 
-    // Aplicar Rack de Pós-Processamento Global (Duotone, Bloom, Scanlines, Vinheta CRT, RGB Final)
-    applyGlobalPostFx(outputCanvas, state);
+    // Aplicar Rack de Pós-Processamento Global (Duotone, Bloom, Scanlines, Vinheta CRT, RGB Final, Máscara de Foco e Alpha Cutout)
+    applyGlobalPostFx(outputCanvas, state, sourceCanvas);
+    canvasWrapper.classList.toggle('transparent-checker', Boolean(state.transparentBg));
 
     const dt = Math.max(1, Math.round(performance.now() - t0));
 
@@ -6745,15 +7086,19 @@ canvas {
     setRangeVal('img-sharpen', 'val-img-sharpen', state.sharpen, `${state.sharpen}%`);
     document.getElementById('img-invert').checked = state.invert;
 
-    // Cores & Duotone
+    // Cores, Transparência & Duotone
     document.getElementById('color-fg').value = state.fgColor;
     document.getElementById('color-bg').value = state.bgColor;
     document.getElementById('hex-fg').textContent = state.fgColor.toUpperCase();
     document.getElementById('hex-bg').textContent = state.bgColor.toUpperCase();
+    document.getElementById('transparent-bg').checked = Boolean(state.transparentBg);
     document.getElementById('duotone-enabled').checked = state.duotoneEnabled;
     setRangeVal('duotone-mix', 'val-duotone-mix', state.duotoneMix, `${state.duotoneMix}%`);
 
-    // Post-FX
+    // Post-FX & Máscara de Foco
+    document.getElementById('focus-mask-mode').value = state.focusMaskMode || 'none';
+    setRangeVal('focus-mask-radius', 'val-focus-mask-radius', state.focusMaskRadius ?? 55, `${state.focusMaskRadius ?? 55}%`);
+    setRangeVal('original-mix', 'val-original-mix', state.originalMix ?? 0, `${state.originalMix ?? 0}%`);
     setRangeVal('post-bloom', 'val-post-bloom', state.postBloom, `${state.postBloom}%`);
     setRangeVal('post-vignette', 'val-post-vignette', state.postVignette, `${state.postVignette}%`);
     setRangeVal('post-scanlines', 'val-post-scanlines', state.postScanlines, `${state.postScanlines}%`);
@@ -7611,6 +7956,12 @@ canvas {
       applyColors(state.bgColor, state.fgColor);
     });
 
+    document.getElementById('transparent-bg').addEventListener('change', (e) => {
+      pushUndoSnapshot();
+      state.transparentBg = e.target.checked;
+      scheduleRender();
+    });
+
     document.getElementById('duotone-enabled').addEventListener('change', (e) => {
       pushUndoSnapshot();
       state.duotoneEnabled = e.target.checked;
@@ -7622,7 +7973,23 @@ canvas {
       return `${v}%`;
     });
 
-    // 10. Rack de Pós-Efeitos Global (Post-FX)
+    // 10. Rack de Pós-Efeitos Global & Máscara de Foco
+    document.getElementById('focus-mask-mode').addEventListener('change', (e) => {
+      pushUndoSnapshot();
+      state.focusMaskMode = e.target.value;
+      scheduleRender();
+    });
+
+    bindRange('focus-mask-radius', 'val-focus-mask-radius', (v) => {
+      state.focusMaskRadius = parseInt(v, 10);
+      return `${v}%`;
+    });
+
+    bindRange('original-mix', 'val-original-mix', (v) => {
+      state.originalMix = parseInt(v, 10);
+      return `${v}%`;
+    });
+
     bindRange('post-bloom', 'val-post-bloom', (v) => {
       state.postBloom = parseInt(v, 10);
       return `${v}%`;
@@ -7645,16 +8012,36 @@ canvas {
 
     document.getElementById('btn-reset-postfx').addEventListener('click', () => {
       pushUndoSnapshot();
+      state.focusMaskMode = 'none';
+      state.focusMaskRadius = 55;
+      state.originalMix = 0;
       state.postBloom = 0;
       state.postVignette = 0;
       state.postScanlines = 0;
       state.postChroma = 0;
       syncUiFromState();
       scheduleRender();
-      showToast('Rack de Pós-Efeitos zerado');
+      showToast('Pós-Efeitos e Máscara zerados');
     });
 
-    // 11. Palco: Split-Screen Curtain, Comparação, Wheel Zoom & Drag Pan
+    // 11. Palco: Formato Social Media, Safe Zone, Split-Screen, Comparação, Wheel Zoom & Pan
+    document.getElementById('social-aspect').addEventListener('change', (e) => {
+      state.socialAspect = e.target.value;
+      applyAspectCropToSource();
+      updateHistogramUi();
+      scheduleRender();
+      showToast(`📐 Formato alterado para ${e.target.options[e.target.selectedIndex].text.replace('📐 ', '')}`);
+    });
+
+    const btnSafeZone = document.getElementById('btn-safe-zone');
+    const safeZoneOverlay = document.getElementById('safe-zone-overlay');
+    const toggleSafeZone = () => {
+      state.safeZoneActive = !state.safeZoneActive;
+      btnSafeZone.classList.toggle('active', state.safeZoneActive);
+      safeZoneOverlay.classList.toggle('hidden', !state.safeZoneActive);
+    };
+    btnSafeZone.addEventListener('click', toggleSafeZone);
+
     document.getElementById('btn-split-compare').addEventListener('click', () => {
       setSplitScreen(!state.splitActive);
     });
@@ -7754,11 +8141,19 @@ canvas {
         return;
       }
 
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        document.getElementById('btn-copy-png').click();
+        return;
+      }
+
       if (e.code === 'Space') {
         e.preventDefault();
         setAnimationActive(!state.anim.active);
       } else if (e.key.toLowerCase() === 'c') {
         setSplitScreen(!state.splitActive);
+      } else if (e.key.toLowerCase() === 'g') {
+        toggleSafeZone();
       } else if (e.key.toLowerCase() === 'd') {
         randomizeCurrentMode();
       } else if (e.key.toLowerCase() === 'i') {
@@ -7772,17 +8167,32 @@ canvas {
       }
     });
 
-    // 13. Exportação, Sprite Sheet & Gravação de Vídeo com Timer
+    // 13. Exportação, Clipboard PNG (Figma/PS), Sprite Sheet & Gravação de Vídeo (MP4/WebM)
+    const getExportScale = () => parseInt(document.getElementById('export-scale').value, 10) || 1;
+
+    document.getElementById('btn-copy-png').addEventListener('click', async () => {
+      try {
+        const scale = getExportScale();
+        await copyCanvasPngToClipboard(outputCanvas, scale);
+        showToast(
+          `📋 PNG (${scale}×${state.transparentBg ? ' • Fundo Transparente' : ''}) copiado! Dê Cmd/Ctrl+V no Figma ou Photoshop.`
+        );
+      } catch (err) {
+        showToast(`⚠ ${err.message}`);
+      }
+    });
+
     const btnRecord = document.getElementById('btn-record-video');
     const stopRecordingNow = () => {
       if (activeRecorder && activeRecorder.state === 'recording') {
+        const ext = (activeRecorder.fileExtension || 'webm').toUpperCase();
         activeRecorder.stop();
         activeRecorder = null;
         clearInterval(recordTimerInterval);
         clearTimeout(recordAutoStopTimeout);
         btnRecord.classList.remove('recording');
         btnRecord.textContent = '⏺ Gravar Vídeo';
-        showToast('🎬 Vídeo WebM exportado com sucesso!');
+        showToast(`🎬 Vídeo .${ext} exportado com sucesso!`);
       }
     };
 
@@ -7805,13 +8215,14 @@ canvas {
       activeRecorder = recorder;
       recordSeconds = 0;
       const maxDur = parseInt(document.getElementById('record-duration').value, 10) || 0;
+      const extLabel = (recorder.fileExtension || 'webm').toUpperCase();
 
       btnRecord.classList.add('recording');
       btnRecord.textContent = maxDur > 0 ? `⏹ 0/${maxDur}s` : '⏹ Parar (00s)';
       showToast(
         maxDur > 0
-          ? `⏺ Gravando loop de ${maxDur} segundos...`
-          : '⏺ Gravando animação... Clique novamente para parar.'
+          ? `⏺ Gravando loop .${extLabel} de ${maxDur} segundos...`
+          : `⏺ Gravando vídeo .${extLabel}... Clique novamente para parar.`
       );
 
       recordTimerInterval = setInterval(() => {
@@ -7837,8 +8248,9 @@ canvas {
     });
 
     document.getElementById('btn-export-png').addEventListener('click', () => {
-      downloadPng(outputCanvas, `degen-${state.mode}-${Date.now()}.png`);
-      showToast('⬇ Imagem PNG exportada!');
+      const scale = getExportScale();
+      downloadPng(outputCanvas, `degen-${state.mode}-${scale}x-${Date.now()}.png`, scale);
+      showToast(`⬇ Imagem PNG (${scale}× HD) exportada!`);
     });
 
     document.getElementById('btn-export-svg').addEventListener('click', () => {
@@ -7863,8 +8275,11 @@ canvas {
         showToast('SVG disponível em ASCII, Bitmap, Halftone, Luma Mesh, Plexus, Decimate e Osciloscópio');
         return;
       }
+      if (state.transparentBg) {
+        svg = svg.replace(/<rect width="100%" height="100%" fill="[^"]*"\s*\/>\s*/i, '');
+      }
       downloadTextFile(svg, `degen-${state.mode}-${Date.now()}.svg`, 'image/svg+xml;charset=utf-8');
-      showToast('⬇ Vetor SVG exportado!');
+      showToast(`⬇ Vetor SVG${state.transparentBg ? ' (Fundo Transparente)' : ''} exportado!`);
     });
 
     document.getElementById('btn-export-txt').addEventListener('click', () => {

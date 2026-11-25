@@ -746,6 +746,16 @@
           </div>
 
           <div class="view-controls">
+            <select id="social-aspect" class="toolbar-select" title="Enquadramento e Proporção para Redes Sociais">
+              <option value="original">📐 Formato: Original</option>
+              <option value="4:5">📐 4:5 (Feed IG)</option>
+              <option value="9:16">📐 9:16 (Reels / Stories)</option>
+              <option value="1:1">📐 1:1 (Quadrado)</option>
+              <option value="16:9">📐 16:9 (Widescreen)</option>
+            </select>
+            <button class="btn btn-ghost btn-sm" id="btn-safe-zone" title="Mostrar/Ocultar Guias de Safe Zone do Instagram/TikTok (Tecla G — não sai na exportação)">
+              🛡️ Safe Zone
+            </button>
             <button class="btn btn-ghost btn-sm" id="btn-split-compare" title="Ativar cortina deslizante Antes / Depois (Tecla C)">
               ◫ Cortina Antes/Depois
             </button>
@@ -766,6 +776,14 @@
           <div class="canvas-wrapper" id="canvas-wrapper">
             <canvas id="output-canvas"></canvas>
             <canvas id="original-canvas" class="hidden"></canvas>
+
+            <!-- Non-Exported Social Media Safe Zone Guides -->
+            <div class="safe-zone-overlay hidden" id="safe-zone-overlay">
+              <div class="sz-top"><span>UI TOPO / STORIES</span></div>
+              <div class="sz-right"><span>ÍCONES REELS</span></div>
+              <div class="sz-bottom"><span>ÁREA DE LEGENDA & ÁUDIO</span></div>
+              <div class="sz-center-cross"></div>
+            </div>
 
             <!-- Draggable Split-Screen Curtain Handle -->
             <div class="split-divider hidden" id="split-divider">
@@ -788,11 +806,11 @@
         <!-- Bottom Export Bar -->
         <footer class="export-bar">
           <div class="export-hint">
-            <span>Atalhos: <kbd>Espaço</kbd> Play • <kbd>C</kbd> Cortina • <kbd>D</kbd> Surprise • <kbd>I</kbd> Inverter • <kbd>Ctrl+Z</kbd> Undo</span>
+            <span>Atalhos: <kbd>Espaço</kbd> Play • <kbd>C</kbd> Cortina • <kbd>G</kbd> Safe Zone • <kbd>D</kbd> Surprise • <kbd>Ctrl+Z</kbd> Undo</span>
           </div>
           <div class="export-buttons">
-            <button class="btn btn-secondary btn-sm" id="btn-copy-ascii" title="Copiar arte em texto para a área de transferência">
-              📋 Copiar
+            <button class="btn btn-secondary btn-sm" id="btn-copy-ascii" title="Copiar arte em texto ASCII para a área de transferência">
+              📋 TXT
             </button>
             <button class="btn btn-secondary btn-sm" id="btn-export-txt" title="Baixar arquivo de texto (.txt)">
               ⬇ TXT
@@ -814,14 +832,24 @@
                 <option value="5" selected>Loop 5s</option>
                 <option value="10">Loop 10s</option>
               </select>
-              <button class="btn btn-record btn-sm" id="btn-record-video" title="Gravar animação em vídeo (.webm) — Tecla R">
+              <button class="btn btn-record btn-sm" id="btn-record-video" title="Gravar animação em vídeo (.mp4 / .webm) — Tecla R">
                 ⏺ Gravar Vídeo
               </button>
             </div>
 
-            <button class="btn btn-primary btn-sm" id="btn-export-png" title="Baixar quadro atual em alta resolução (.png)">
-              ⬇ Exportar PNG
+            <button class="btn btn-accent-outline btn-sm" id="btn-copy-png" title="Copiar imagem PNG direto para o Clipboard para colar (Cmd+V) no Figma ou Photoshop">
+              📋 Copiar PNG
             </button>
+
+            <div class="export-png-group">
+              <select id="export-scale" title="Resolução de exportação PNG (1x padrão ou 2x Super-Sampling HD para Social Media)">
+                <option value="1">1× Padrão</option>
+                <option value="2" selected>2× HD Social</option>
+              </select>
+              <button class="btn btn-primary btn-sm" id="btn-export-png" title="Baixar quadro atual em alta resolução (.png)">
+                ⬇ Exportar PNG
+              </button>
+            </div>
           </div>
         </footer>
       </main>
@@ -1030,6 +1058,13 @@
 
           <div class="checkbox-row" style="margin-top: 10px;">
             <label class="toggle-label">
+              <input type="checkbox" id="transparent-bg" />
+              <span>🏁 Fundo Transparente (Recorte Alpha p/ Figma & PS)</span>
+            </label>
+          </div>
+
+          <div class="checkbox-row" style="margin-top: 6px;">
+            <label class="toggle-label">
               <input type="checkbox" id="duotone-enabled" />
               <span>Colorizar Qualquer Motor (Duotone Universal)</span>
             </label>
@@ -1044,11 +1079,39 @@
           </div>
         </section>
 
-        <!-- 07. Global Post-FX Rack -->
+        <!-- 07. Global Post-FX Rack & Subject Focus Mask -->
         <section class="panel-section">
           <div class="section-header">
-            <span class="section-title">07. RACK PÓS-EFEITOS (POST-FX)</span>
+            <span class="section-title">07. PÓS-EFEITOS & MÁSCARA DE FOCO</span>
             <button class="btn-link" id="btn-reset-postfx" title="Zerar efeitos de pós-processamento">Zerar</button>
+          </div>
+
+          <div class="control-group">
+            <label for="focus-mask-mode">🎭 Máscara de Proteção de Sujeito (Rosto / Produto)</label>
+            <select id="focus-mask-mode">
+              <option value="none">Sem Máscara (Efeito em 100% da Imagem)</option>
+              <option value="center-clean">Proteger Centro (Sujeito Nítido, Efeito nas Bordas)</option>
+              <option value="edges-clean">Foco no Centro (Efeito no Centro, Bordas Originais)</option>
+              <option value="vertical-fade">Degradê Vertical (Topo Original → Base com Efeito)</option>
+            </select>
+          </div>
+
+          <div class="two-col-controls">
+            <div class="control-group">
+              <div class="control-label-row">
+                <label for="focus-mask-radius">Raio da Máscara</label>
+                <span class="control-value" id="val-focus-mask-radius">55%</span>
+              </div>
+              <input type="range" id="focus-mask-radius" min="15" max="95" step="5" value="55" />
+            </div>
+
+            <div class="control-group">
+              <div class="control-label-row">
+                <label for="original-mix">Mix c/ Original</label>
+                <span class="control-value" id="val-original-mix">0%</span>
+              </div>
+              <input type="range" id="original-mix" min="0" max="90" step="5" value="0" />
+            </div>
           </div>
 
           <div class="two-col-controls">

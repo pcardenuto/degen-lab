@@ -3,6 +3,7 @@
   const { preprocessImage, hexToRgb } = DegenLab;
 
   let bloomCanvas = null;
+  let maskCanvas = null;
 
   /**
    * Renderiza o Histograma de Luminância em Tempo Real (64 bins)
@@ -41,7 +42,6 @@
     ctx.fillStyle = '#07090d';
     ctx.fillRect(0, 0, w, h);
 
-    // Grade de fundo técnica
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
     ctx.lineWidth = 1;
     for (let gx = 0.25; gx < 1; gx += 0.25) {
@@ -51,7 +51,6 @@
       ctx.stroke();
     }
 
-    // Desenhar curva preenchida do histograma
     const grad = ctx.createLinearGradient(0, 0, 0, h);
     grad.addColorStop(0, 'rgba(0, 230, 118, 0.65)');
     grad.addColorStop(1, 'rgba(0, 230, 118, 0.05)');
@@ -69,7 +68,6 @@
     ctx.fillStyle = grad;
     ctx.fill();
 
-    // Linha de topo do histograma
     ctx.beginPath();
     for (let i = 0; i < 64; i++) {
       const x = (i / 63) * w;
@@ -82,7 +80,6 @@
     ctx.lineWidth = 1.4;
     ctx.stroke();
 
-    // Marcadores visuais de limiar (quando em Bitmap ou Pixel Sort)
     if (state.mode === 'bitmap') {
       const tx = ((state.bitmapThreshold ?? 128) / 255) * w;
       ctx.strokeStyle = '#ffb000';
@@ -103,10 +100,14 @@
   }
 
   /**
-   * Aplica o Rack de Pós-Processamento Global (Duotone Universal, Phosphor Bloom, Scanlines e Vinheta CRT)
-   * sobre a saída de qualquer um dos 12 motores.
+   * Aplica o Rack de Pós-Processamento Global:
+   * - Duotone Universal & Aberração Cromática Final
+   * - Phosphor Bloom / Neon Glow
+   * - Scanlines & Vinheta CRT
+   * - Máscara de Foco (Proteger Rosto/Produto no Centro ou Topo) + Mix com Foto Original
+   * - Recorte de Fundo Transparente (Alpha Channel Cutout para Figma/Photoshop)
    */
-  function applyGlobalPostFx(outputCanvas, state) {
+  function applyGlobalPostFx(outputCanvas, state, sourceCanvas) {
     const w = outputCanvas.width;
     const h = outputCanvas.height;
     if (!w || !h) return;
@@ -121,9 +122,10 @@
     const scanlinesAmt = (state.postScanlines ?? 0) / 100;
     const vignetteAmt = (state.postVignette ?? 0) / 100;
     const chromaShift = Math.round((state.postChroma ?? 0) + audioHigh * 6);
+    const transparentBg = Boolean(state.transparentBg);
 
-    // 1. Duotone Color Grading Universal + Aberração Cromática Final (por manipulação de buffer)
-    if (duotoneOn || chromaShift > 0) {
+    // 1. Duotone Color Grading Universal + Aberração Cromática Final + Recorte Alpha Transparente
+    if (duotoneOn || chromaShift > 0 || transparentBg) {
       const imgData = ctx.getImageData(0, 0, w, h);
       const data = imgData.data;
       const srcCopy = chromaShift > 0 ? new Uint8ClampedArray(data) : null;
@@ -159,6 +161,19 @@
             data[idx] = Math.round(r * (1 - duotoneMix) + dr * duotoneMix);
             data[idx + 1] = Math.round(g * (1 - duotoneMix) + dg * duotoneMix);
             data[idx + 2] = Math.round(b * (1 - duotoneMix) + db * duotoneMix);
+          }
+
+          if (transparentBg) {
+            // Calcular distância cromática em relação à cor de fundo (bgColor) para preservar anti-aliasing suave
+            const dr = data[idx] - bg.r;
+            const dg = data[idx + 1] - bg.g;
+            const db = data[idx + 2] - bg.b;
+            const dist = Math.sqrt(dr * dr + dg * dg + db * db);
+            if (dist < 14) {
+              data[idx + 3] = 0;
+            } else if (dist < 64) {
+              data[idx + 3] = Math.round(((dist - 14) / 50) * 255);
+            }
           }
         }
       }
@@ -199,7 +214,7 @@
     }
 
     // 4. Lente CRT Curva & Vinheta
-    if (vignetteAmt > 0.02) {
+    if (vignetteAmt > 0.02 && !transparentBg) {
       ctx.save();
       const cx = w * 0.5;
       const cy = h * 0.5;
@@ -214,12 +229,77 @@
       ctx.fillStyle = vGrad;
       ctx.fillRect(0, 0, w, h);
 
-      // Moldura arredondada sutil de tubo CRT
       if (vignetteAmt > 0.35) {
         ctx.strokeStyle = `rgba(0,0,0,${(vignetteAmt * 0.75).toFixed(2)})`;
         ctx.lineWidth = Math.max(6, Math.min(w, h) * 0.022 * vignetteAmt);
         ctx.strokeRect(0, 0, w, h);
       }
+      ctx.restore();
+    }
+
+    // 5. Máscara de Foco (Proteger Sujeito / Rosto / Produto) & Mix com Foto Original
+    const focusMode = state.focusMaskMode || 'none';
+    const originalMix = (state.originalMix ?? 0) / 100;
+
+    if (sourceCanvas && (focusMode !== 'none' || originalMix > 0.01)) {
+      applyFocusMaskAndMix(ctx, sourceCanvas, w, h, focusMode, (state.focusMaskRadius ?? 55) / 100, originalMix);
+    }
+  }
+
+  function applyFocusMaskAndMix(ctx, sourceCanvas, w, h, focusMode, radiusNorm, originalMix) {
+    if (!maskCanvas) {
+      maskCanvas = document.createElement('canvas');
+    }
+    maskCanvas.width = w;
+    maskCanvas.height = h;
+    const mCtx = maskCanvas.getContext('2d');
+    mCtx.clearRect(0, 0, w, h);
+
+    // Desenhar a foto original no maskCanvas
+    mCtx.drawImage(sourceCanvas, 0, 0, w, h);
+
+    if (focusMode !== 'none') {
+      // Aplicar máscara de recorte alfa usando destination-in
+      mCtx.globalCompositeOperation = 'destination-in';
+      const cx = w * 0.5;
+      const cy = h * 0.5;
+      const maxR = Math.hypot(cx, cy);
+
+      if (focusMode === 'center-clean') {
+        // Centro mostra a foto original nítida; bordas mostram o efeito generativo
+        const innerR = maxR * Math.max(0.05, radiusNorm * 0.45);
+        const outerR = maxR * Math.min(1.0, radiusNorm * 0.95 + 0.12);
+        const g = mCtx.createRadialGradient(cx, cy, innerR, cx, cy, outerR);
+        g.addColorStop(0, 'rgba(0,0,0,1)');
+        g.addColorStop(1, `rgba(0,0,0,${originalMix.toFixed(2)})`);
+        mCtx.fillStyle = g;
+        mCtx.fillRect(0, 0, w, h);
+      } else if (focusMode === 'edges-clean') {
+        // Centro tem o efeito generativo; bordas preservam a foto original
+        const innerR = maxR * Math.max(0.08, radiusNorm * 0.38);
+        const outerR = maxR * Math.min(1.0, radiusNorm * 0.88 + 0.1);
+        const g = mCtx.createRadialGradient(cx, cy, innerR, cx, cy, outerR);
+        g.addColorStop(0, `rgba(0,0,0,${originalMix.toFixed(2)})`);
+        g.addColorStop(1, 'rgba(0,0,0,1)');
+        mCtx.fillStyle = g;
+        mCtx.fillRect(0, 0, w, h);
+      } else if (focusMode === 'vertical-fade') {
+        // Degradê vertical para posts de Feed/Stories
+        const splitY = h * radiusNorm;
+        const feather = h * 0.25;
+        const g = mCtx.createLinearGradient(0, Math.max(0, splitY - feather), 0, Math.min(h, splitY + feather));
+        g.addColorStop(0, 'rgba(0,0,0,1)');
+        g.addColorStop(1, `rgba(0,0,0,${originalMix.toFixed(2)})`);
+        mCtx.fillStyle = g;
+        mCtx.fillRect(0, 0, w, h);
+      }
+
+      mCtx.globalCompositeOperation = 'source-over';
+      ctx.drawImage(maskCanvas, 0, 0);
+    } else if (originalMix > 0.01) {
+      ctx.save();
+      ctx.globalAlpha = originalMix;
+      ctx.drawImage(sourceCanvas, 0, 0, w, h);
       ctx.restore();
     }
   }

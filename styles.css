@@ -931,6 +931,109 @@ canvas {
   z-index: 100;
 }
 
+.toolbar-select {
+  width: auto;
+  padding: 3px 8px;
+  font-size: 11px;
+  background: var(--bg-root);
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  color: var(--text-primary);
+}
+
+.export-png-group {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg-root);
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.export-png-group select {
+  width: auto;
+  border: none;
+  background: transparent;
+  padding: 4px 6px;
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 600;
+  border-right: 1px solid rgba(0, 230, 118, 0.35);
+  border-radius: 0;
+}
+
+.export-png-group .btn-primary {
+  border: none;
+  border-radius: 0;
+}
+
+.canvas-wrapper.transparent-checker {
+  background-color: #12151c;
+  background-image:
+    linear-gradient(45deg, #1b202b 25%, transparent 25%),
+    linear-gradient(-45deg, #1b202b 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #1b202b 75%),
+    linear-gradient(-45deg, transparent 75%, #1b202b 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}
+
+/* Social Media Safe Zone Overlay */
+.safe-zone-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 12;
+  border: 1px dashed rgba(0, 230, 118, 0.45);
+}
+
+.sz-top,
+.sz-bottom,
+.sz-right {
+  position: absolute;
+  background: rgba(255, 51, 102, 0.14);
+  border: 1px dashed rgba(255, 51, 102, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.75);
+  letter-spacing: 0.5px;
+}
+
+.sz-top {
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 11%;
+}
+
+.sz-bottom {
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 18%;
+}
+
+.sz-right {
+  top: 28%;
+  bottom: 20%;
+  right: 0;
+  width: 14%;
+  writing-mode: vertical-rl;
+}
+
+.sz-center-cross {
+  position: absolute;
+  top: 11%;
+  bottom: 18%;
+  left: 6%;
+  right: 14%;
+  border: 1px dashed rgba(0, 230, 118, 0.5);
+}
+
 .hidden {
   display: none !important;
 }

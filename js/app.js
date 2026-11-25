@@ -34,6 +34,7 @@
     renderWaves,
     buildWavesSvg,
     downloadPng,
+    copyCanvasPngToClipboard,
     downloadTextFile,
     copyToClipboard,
     createCanvasRecorder,
@@ -54,9 +55,17 @@
     fgColor: '#e8f5e9',
     bgColor: '#0d1117',
 
-    // Duotone Universal & Post-FX Rack
+    // Social Media Framing & Transparency
+    socialAspect: 'original',
+    safeZoneActive: false,
+    transparentBg: false,
+
+    // Duotone Universal, Focus Mask & Post-FX Rack
     duotoneEnabled: false,
     duotoneMix: 85,
+    focusMaskMode: 'none',
+    focusMaskRadius: 55,
+    originalMix: 0,
     postBloom: 0,
     postVignette: 0,
     postScanlines: 0,
@@ -264,6 +273,7 @@
     }
   };
 
+  let rawSourceCanvas = null;
   let sourceCanvas = null;
   let lastResult = null;
   let renderQueued = false;
@@ -357,22 +367,68 @@
       h = Math.round(h * ratio);
     }
 
-    if (!sourceCanvas || sourceCanvas.width !== w || sourceCanvas.height !== h) {
-      sourceCanvas = document.createElement('canvas');
-      sourceCanvas.width = w;
-      sourceCanvas.height = h;
-      originalCanvas.width = w;
-      originalCanvas.height = h;
+    if (!rawSourceCanvas || rawSourceCanvas.width !== w || rawSourceCanvas.height !== h) {
+      rawSourceCanvas = document.createElement('canvas');
+      rawSourceCanvas.width = w;
+      rawSourceCanvas.height = h;
     }
 
-    sourceCanvas.getContext('2d').drawImage(imgOrCanvas, 0, 0, w, h);
-    originalCanvas.getContext('2d').drawImage(sourceCanvas, 0, 0);
+    rawSourceCanvas.getContext('2d').drawImage(imgOrCanvas, 0, 0, w, h);
+    applyAspectCropToSource();
 
     updateHistogramUi();
     scheduleRender();
     if (label) {
-      showToast(`✓ ${label} (${w}×${h}px)`);
+      showToast(`✓ ${label} (${sourceCanvas.width}×${sourceCanvas.height}px)`);
     }
+  }
+
+  /**
+   * Aplica o enquadramento não-destrutivo de Social Media (Original, 4:5 Feed, 9:16 Reels, 1:1, 16:9)
+   * usando Center-Cover Crop a partir de rawSourceCanvas.
+   */
+  function applyAspectCropToSource() {
+    if (!rawSourceCanvas) return;
+    const rawW = rawSourceCanvas.width;
+    const rawH = rawSourceCanvas.height;
+
+    let targetW = rawW;
+    let targetH = rawH;
+
+    if (state.socialAspect === '4:5') {
+      targetW = 640;
+      targetH = 800;
+    } else if (state.socialAspect === '9:16') {
+      targetW = 540;
+      targetH = 960;
+    } else if (state.socialAspect === '1:1') {
+      targetW = 720;
+      targetH = 720;
+    } else if (state.socialAspect === '16:9') {
+      targetW = 864;
+      targetH = 486;
+    }
+
+    if (!sourceCanvas || sourceCanvas.width !== targetW || sourceCanvas.height !== targetH) {
+      sourceCanvas = document.createElement('canvas');
+      sourceCanvas.width = targetW;
+      sourceCanvas.height = targetH;
+      originalCanvas.width = targetW;
+      originalCanvas.height = targetH;
+      resetDatamoshBuffer();
+      resetFeedbackBuffer();
+    }
+
+    const scale = Math.max(targetW / rawW, targetH / rawH);
+    const sw = rawW * scale;
+    const sh = rawH * scale;
+    const dx = (targetW - sw) * 0.5;
+    const dy = (targetH - sh) * 0.5;
+
+    const ctx = sourceCanvas.getContext('2d');
+    ctx.clearRect(0, 0, targetW, targetH);
+    ctx.drawImage(rawSourceCanvas, dx, dy, sw, sh);
+    originalCanvas.getContext('2d').drawImage(sourceCanvas, 0, 0);
   }
 
   function updateHistogramUi() {
@@ -417,10 +473,10 @@
     }
 
     // 2. Atualizar frame de vídeo ou webcam se ativo
-    if (activeVideoEl && activeVideoEl.readyState >= 2) {
-      const w = sourceCanvas.width;
-      const h = sourceCanvas.height;
-      const ctx = sourceCanvas.getContext('2d');
+    if (activeVideoEl && activeVideoEl.readyState >= 2 && rawSourceCanvas) {
+      const w = rawSourceCanvas.width;
+      const h = rawSourceCanvas.height;
+      const ctx = rawSourceCanvas.getContext('2d');
       ctx.save();
       if (isWebcamActive) {
         ctx.translate(w, 0);
@@ -428,7 +484,7 @@
       }
       ctx.drawImage(activeVideoEl, 0, 0, w, h);
       ctx.restore();
-      originalCanvas.getContext('2d').drawImage(sourceCanvas, 0, 0);
+      applyAspectCropToSource();
     }
 
     performRender();
@@ -507,8 +563,9 @@
     state.anim.active = prevAnimActive;
     state.anim.intensity = prevAnimIntensity;
 
-    // Aplicar Rack de Pós-Processamento Global (Duotone, Bloom, Scanlines, Vinheta CRT, RGB Final)
-    applyGlobalPostFx(outputCanvas, state);
+    // Aplicar Rack de Pós-Processamento Global (Duotone, Bloom, Scanlines, Vinheta CRT, RGB Final, Máscara de Foco e Alpha Cutout)
+    applyGlobalPostFx(outputCanvas, state, sourceCanvas);
+    canvasWrapper.classList.toggle('transparent-checker', Boolean(state.transparentBg));
 
     const dt = Math.max(1, Math.round(performance.now() - t0));
 
@@ -695,15 +752,19 @@
     setRangeVal('img-sharpen', 'val-img-sharpen', state.sharpen, `${state.sharpen}%`);
     document.getElementById('img-invert').checked = state.invert;
 
-    // Cores & Duotone
+    // Cores, Transparência & Duotone
     document.getElementById('color-fg').value = state.fgColor;
     document.getElementById('color-bg').value = state.bgColor;
     document.getElementById('hex-fg').textContent = state.fgColor.toUpperCase();
     document.getElementById('hex-bg').textContent = state.bgColor.toUpperCase();
+    document.getElementById('transparent-bg').checked = Boolean(state.transparentBg);
     document.getElementById('duotone-enabled').checked = state.duotoneEnabled;
     setRangeVal('duotone-mix', 'val-duotone-mix', state.duotoneMix, `${state.duotoneMix}%`);
 
-    // Post-FX
+    // Post-FX & Máscara de Foco
+    document.getElementById('focus-mask-mode').value = state.focusMaskMode || 'none';
+    setRangeVal('focus-mask-radius', 'val-focus-mask-radius', state.focusMaskRadius ?? 55, `${state.focusMaskRadius ?? 55}%`);
+    setRangeVal('original-mix', 'val-original-mix', state.originalMix ?? 0, `${state.originalMix ?? 0}%`);
     setRangeVal('post-bloom', 'val-post-bloom', state.postBloom, `${state.postBloom}%`);
     setRangeVal('post-vignette', 'val-post-vignette', state.postVignette, `${state.postVignette}%`);
     setRangeVal('post-scanlines', 'val-post-scanlines', state.postScanlines, `${state.postScanlines}%`);
@@ -1561,6 +1622,12 @@
       applyColors(state.bgColor, state.fgColor);
     });
 
+    document.getElementById('transparent-bg').addEventListener('change', (e) => {
+      pushUndoSnapshot();
+      state.transparentBg = e.target.checked;
+      scheduleRender();
+    });
+
     document.getElementById('duotone-enabled').addEventListener('change', (e) => {
       pushUndoSnapshot();
       state.duotoneEnabled = e.target.checked;
@@ -1572,7 +1639,23 @@
       return `${v}%`;
     });
 
-    // 10. Rack de Pós-Efeitos Global (Post-FX)
+    // 10. Rack de Pós-Efeitos Global & Máscara de Foco
+    document.getElementById('focus-mask-mode').addEventListener('change', (e) => {
+      pushUndoSnapshot();
+      state.focusMaskMode = e.target.value;
+      scheduleRender();
+    });
+
+    bindRange('focus-mask-radius', 'val-focus-mask-radius', (v) => {
+      state.focusMaskRadius = parseInt(v, 10);
+      return `${v}%`;
+    });
+
+    bindRange('original-mix', 'val-original-mix', (v) => {
+      state.originalMix = parseInt(v, 10);
+      return `${v}%`;
+    });
+
     bindRange('post-bloom', 'val-post-bloom', (v) => {
       state.postBloom = parseInt(v, 10);
       return `${v}%`;
@@ -1595,16 +1678,36 @@
 
     document.getElementById('btn-reset-postfx').addEventListener('click', () => {
       pushUndoSnapshot();
+      state.focusMaskMode = 'none';
+      state.focusMaskRadius = 55;
+      state.originalMix = 0;
       state.postBloom = 0;
       state.postVignette = 0;
       state.postScanlines = 0;
       state.postChroma = 0;
       syncUiFromState();
       scheduleRender();
-      showToast('Rack de Pós-Efeitos zerado');
+      showToast('Pós-Efeitos e Máscara zerados');
     });
 
-    // 11. Palco: Split-Screen Curtain, Comparação, Wheel Zoom & Drag Pan
+    // 11. Palco: Formato Social Media, Safe Zone, Split-Screen, Comparação, Wheel Zoom & Pan
+    document.getElementById('social-aspect').addEventListener('change', (e) => {
+      state.socialAspect = e.target.value;
+      applyAspectCropToSource();
+      updateHistogramUi();
+      scheduleRender();
+      showToast(`📐 Formato alterado para ${e.target.options[e.target.selectedIndex].text.replace('📐 ', '')}`);
+    });
+
+    const btnSafeZone = document.getElementById('btn-safe-zone');
+    const safeZoneOverlay = document.getElementById('safe-zone-overlay');
+    const toggleSafeZone = () => {
+      state.safeZoneActive = !state.safeZoneActive;
+      btnSafeZone.classList.toggle('active', state.safeZoneActive);
+      safeZoneOverlay.classList.toggle('hidden', !state.safeZoneActive);
+    };
+    btnSafeZone.addEventListener('click', toggleSafeZone);
+
     document.getElementById('btn-split-compare').addEventListener('click', () => {
       setSplitScreen(!state.splitActive);
     });
@@ -1704,11 +1807,19 @@
         return;
       }
 
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        document.getElementById('btn-copy-png').click();
+        return;
+      }
+
       if (e.code === 'Space') {
         e.preventDefault();
         setAnimationActive(!state.anim.active);
       } else if (e.key.toLowerCase() === 'c') {
         setSplitScreen(!state.splitActive);
+      } else if (e.key.toLowerCase() === 'g') {
+        toggleSafeZone();
       } else if (e.key.toLowerCase() === 'd') {
         randomizeCurrentMode();
       } else if (e.key.toLowerCase() === 'i') {
@@ -1722,17 +1833,32 @@
       }
     });
 
-    // 13. Exportação, Sprite Sheet & Gravação de Vídeo com Timer
+    // 13. Exportação, Clipboard PNG (Figma/PS), Sprite Sheet & Gravação de Vídeo (MP4/WebM)
+    const getExportScale = () => parseInt(document.getElementById('export-scale').value, 10) || 1;
+
+    document.getElementById('btn-copy-png').addEventListener('click', async () => {
+      try {
+        const scale = getExportScale();
+        await copyCanvasPngToClipboard(outputCanvas, scale);
+        showToast(
+          `📋 PNG (${scale}×${state.transparentBg ? ' • Fundo Transparente' : ''}) copiado! Dê Cmd/Ctrl+V no Figma ou Photoshop.`
+        );
+      } catch (err) {
+        showToast(`⚠ ${err.message}`);
+      }
+    });
+
     const btnRecord = document.getElementById('btn-record-video');
     const stopRecordingNow = () => {
       if (activeRecorder && activeRecorder.state === 'recording') {
+        const ext = (activeRecorder.fileExtension || 'webm').toUpperCase();
         activeRecorder.stop();
         activeRecorder = null;
         clearInterval(recordTimerInterval);
         clearTimeout(recordAutoStopTimeout);
         btnRecord.classList.remove('recording');
         btnRecord.textContent = '⏺ Gravar Vídeo';
-        showToast('🎬 Vídeo WebM exportado com sucesso!');
+        showToast(`🎬 Vídeo .${ext} exportado com sucesso!`);
       }
     };
 
@@ -1755,13 +1881,14 @@
       activeRecorder = recorder;
       recordSeconds = 0;
       const maxDur = parseInt(document.getElementById('record-duration').value, 10) || 0;
+      const extLabel = (recorder.fileExtension || 'webm').toUpperCase();
 
       btnRecord.classList.add('recording');
       btnRecord.textContent = maxDur > 0 ? `⏹ 0/${maxDur}s` : '⏹ Parar (00s)';
       showToast(
         maxDur > 0
-          ? `⏺ Gravando loop de ${maxDur} segundos...`
-          : '⏺ Gravando animação... Clique novamente para parar.'
+          ? `⏺ Gravando loop .${extLabel} de ${maxDur} segundos...`
+          : `⏺ Gravando vídeo .${extLabel}... Clique novamente para parar.`
       );
 
       recordTimerInterval = setInterval(() => {
@@ -1787,8 +1914,9 @@
     });
 
     document.getElementById('btn-export-png').addEventListener('click', () => {
-      downloadPng(outputCanvas, `degen-${state.mode}-${Date.now()}.png`);
-      showToast('⬇ Imagem PNG exportada!');
+      const scale = getExportScale();
+      downloadPng(outputCanvas, `degen-${state.mode}-${scale}x-${Date.now()}.png`, scale);
+      showToast(`⬇ Imagem PNG (${scale}× HD) exportada!`);
     });
 
     document.getElementById('btn-export-svg').addEventListener('click', () => {
@@ -1813,8 +1941,11 @@
         showToast('SVG disponível em ASCII, Bitmap, Halftone, Luma Mesh, Plexus, Decimate e Osciloscópio');
         return;
       }
+      if (state.transparentBg) {
+        svg = svg.replace(/<rect width="100%" height="100%" fill="[^"]*"\s*\/>\s*/i, '');
+      }
       downloadTextFile(svg, `degen-${state.mode}-${Date.now()}.svg`, 'image/svg+xml;charset=utf-8');
-      showToast('⬇ Vetor SVG exportado!');
+      showToast(`⬇ Vetor SVG${state.transparentBg ? ' (Fundo Transparente)' : ''} exportado!`);
     });
 
     document.getElementById('btn-export-txt').addEventListener('click', () => {

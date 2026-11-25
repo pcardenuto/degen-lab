@@ -1,11 +1,38 @@
 (function (global) {
   const DegenLab = (global.DegenLab = global.DegenLab || {});
 
-  function downloadPng(canvas, filename = 'degen-art.png') {
-    canvas.toBlob((blob) => {
+  function getScaledCanvas(canvas, scale = 1) {
+    if (!scale || scale <= 1) return canvas;
+    const out = document.createElement('canvas');
+    out.width = Math.round(canvas.width * scale);
+    out.height = Math.round(canvas.height * scale);
+    const ctx = out.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(canvas, 0, 0, out.width, out.height);
+    return out;
+  }
+
+  function downloadPng(canvas, filename = 'degen-art.png', scale = 1) {
+    const target = getScaledCanvas(canvas, scale);
+    target.toBlob((blob) => {
       if (!blob) return;
       triggerDownload(blob, filename);
     }, 'image/png');
+  }
+
+  /**
+   * Copia a imagem PNG renderizada diretamente para o Clipboard do sistema
+   * permitindo colar (Cmd+V / Ctrl+V) direto no Figma, Photoshop, Illustrator ou Canva!
+   */
+  async function copyCanvasPngToClipboard(canvas, scale = 1) {
+    if (!navigator.clipboard || typeof ClipboardItem === 'undefined') {
+      throw new Error('Clipboard de imagem não suportado neste navegador');
+    }
+    const target = getScaledCanvas(canvas, scale);
+    const blob = await new Promise((resolve) => target.toBlob(resolve, 'image/png'));
+    if (!blob) throw new Error('Falha ao codificar PNG');
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    return true;
   }
 
   function downloadTextFile(content, filename, mimeType = 'text/plain;charset=utf-8') {
@@ -41,7 +68,8 @@
   }
 
   /**
-   * Inicia gravação de vídeo (.webm) diretamente do Canvas a 30 FPS
+   * Inicia gravação de vídeo priorizando formato nativo .MP4 (H.264) para Social Media / Reels,
+   * com fallback automático para .WebM (VP9/VP8).
    */
   function createCanvasRecorder(canvas, filenamePrefix = 'degen-anim') {
     if (!canvas.captureStream || typeof MediaRecorder === 'undefined') {
@@ -50,20 +78,29 @@
 
     const stream = canvas.captureStream(30);
     const mimeCandidates = [
-      'video/webm;codecs=vp9',
-      'video/webm;codecs=vp8',
-      'video/webm'
+      { mime: 'video/mp4;codecs=avc1.42E01E,mp4a.40.2', ext: 'mp4' },
+      { mime: 'video/mp4;codecs=avc1', ext: 'mp4' },
+      { mime: 'video/mp4', ext: 'mp4' },
+      { mime: 'video/webm;codecs=vp9', ext: 'webm' },
+      { mime: 'video/webm;codecs=vp8', ext: 'webm' },
+      { mime: 'video/webm', ext: 'webm' }
     ];
-    let mimeType = '';
-    for (const candidate of mimeCandidates) {
-      if (MediaRecorder.isTypeSupported(candidate)) {
-        mimeType = candidate;
+
+    let chosenMime = '';
+    let chosenExt = 'webm';
+    for (const c of mimeCandidates) {
+      if (MediaRecorder.isTypeSupported(c.mime)) {
+        chosenMime = c.mime;
+        chosenExt = c.ext;
         break;
       }
     }
 
-    const options = mimeType ? { mimeType, videoBitsPerSecond: 6000000 } : {};
+    const options = chosenMime
+      ? { mimeType: chosenMime, videoBitsPerSecond: 10000000 }
+      : { videoBitsPerSecond: 10000000 };
     const recorder = new MediaRecorder(stream, options);
+    recorder.fileExtension = chosenExt;
     const chunks = [];
 
     recorder.ondataavailable = (e) => {
@@ -73,8 +110,8 @@
     };
 
     recorder.onstop = () => {
-      const blob = new Blob(chunks, { type: mimeType || 'video/webm' });
-      triggerDownload(blob, `${filenamePrefix}-${Date.now()}.webm`);
+      const blob = new Blob(chunks, { type: chosenMime || 'video/webm' });
+      triggerDownload(blob, `${filenamePrefix}-${Date.now()}.${chosenExt}`);
     };
 
     recorder.start(100);
@@ -123,10 +160,11 @@
     state.anim.time = savedTime;
     renderStepFn();
 
-    downloadPng(sheet, `degen-spritesheet-${state.mode}-${Date.now()}.png`);
+    downloadPng(sheet, `degen-spritesheet-${state.mode}-${Date.now()}.png`, 1);
   }
 
   DegenLab.downloadPng = downloadPng;
+  DegenLab.copyCanvasPngToClipboard = copyCanvasPngToClipboard;
   DegenLab.downloadTextFile = downloadTextFile;
   DegenLab.copyToClipboard = copyToClipboard;
   DegenLab.createCanvasRecorder = createCanvasRecorder;
