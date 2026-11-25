@@ -1,30 +1,9 @@
-# DEGEN // LAB v4.0 PRO STUDIO — Estúdio de Arte Generativa & Sintetizador Visual
-
-Aplicação web completa para transformar **fotos**, **vídeos** ou **webcam ao vivo** em **12 estilos de arte generativa/degenerativa**, com **layout Dual-Sidebar**, **animação a 60 FPS**, **sintetizador reativo a áudio (VJ)**, **Rack de Pós-Efeitos Global (Post-FX)**, **exportação SVG vetorial**, **Sprite Sheet 6×** e **gravação de vídeo (`.webm`) com timer de loop**.
-
----
+# DEGEN // LAB v4.0 PRO STUDIO
 
 ## Como Executar Localmente (Mac ou Windows)
 
 - **Modo Modular:** Abra `index.html` diretamente no navegador (Chrome, Edge, Brave ou Firefox) ou sirva via HTTP (`python3 -m http.server 8080`).
 - **Modo Portátil (Arquivo Único):** Abra `DEGEN-LAB-v4-Portable.html` diretamente em qualquer navegador — todos os estilos e motores já estão embutidos nele.
-
----
-
-## Como Publicar no GitHub Pages (Deixar Sempre Online)
-
-Este diretório já está inicializado como um repositório **Git** na branch `main` (com `.nojekyll` e workflow de GitHub Pages configurados). Para colocar no ar:
-
-1. Crie um novo repositório vazio no seu GitHub (ex: `degen-lab`).
-2. No terminal (dentro desta pasta), conecte o repositório remoto e envie os arquivos:
-   ```bash
-   git remote add origin https://github.com/pcardenuto/degen-lab.git
-   git push -u origin main
-   ```
-3. No GitHub, acesse a aba **Settings → Pages** do repositório:
-   - Em **Build and deployment → Source**, selecione **Deploy from a branch** (branch `main`, pasta `/ (root)`) **ou** **GitHub Actions**.
-4. Em poucos segundos, sua ferramenta estará online em:
-   `https://pcardenuto.github.io/degen-lab/`
 
 ---
 
